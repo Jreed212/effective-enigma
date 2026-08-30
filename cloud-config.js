@@ -1,6 +1,5 @@
 // Public Supabase client configuration.
-// The anon key is designed to be public; Row Level Security protects user data.
 window.CLOUD_CONFIG = {
-  supabaseUrl: '',
-  supabaseAnonKey: ''
+  supabaseUrl: 'https://etvqnzrejjrwraqrkmrz.supabase.co',
+  supabaseAnonKey: 'sb_publishable_akzGCO2cbXaAae6NxG8sIQ_3QKQJvZ7'
 };
