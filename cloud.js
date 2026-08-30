@@ -76,6 +76,26 @@ window.StrengthCloud = (() => {
     const {error}=await client.from('group_members').delete().eq('group_id',groupId).eq('user_id',uid);
     if(error) throw error;
   }
+async function listMyGroups(){
+    const s=await session(); if(!s) throw new Error('Not signed in');
+    const {data,error}=await client.rpc('list_my_groups'); if(error) throw error; return data||[];
+  }
+  async function listJoinableGroups(){
+    const s=await session(); if(!s) throw new Error('Not signed in');
+    const {data,error}=await client.rpc('list_joinable_groups'); if(error) throw error; return data||[];
+  }
+  async function requestGroupJoin(groupId){
+    const s=await session(); if(!s) throw new Error('Not signed in');
+    const {error}=await client.rpc('request_group_join',{p_group_id:groupId}); if(error) throw error;
+  }
+  async function listOwnedGroupRequests(){
+    const s=await session(); if(!s) throw new Error('Not signed in');
+    const {data,error}=await client.rpc('list_owned_group_requests'); if(error) throw error; return data||[];
+  }
+  async function respondGroupJoinRequest(requestId,approve){
+    const s=await session(); if(!s) throw new Error('Not signed in');
+    const {error}=await client.rpc('respond_group_join_request',{p_request_id:requestId,p_approve:!!approve}); if(error) throw error;
+  }
   
   function toLocal(cloud,base){
     const cp=cloud.profile||{}, p=Object.assign({},base,{id:'cloud-'+cloud.user.id,accountId:cloud.user.id,name:cp.display_name||base.name||'Lifter',start:cp.program_start||'',weight:cp.body_weight??'',waist:cp.waist??'',height:cp.height||'',goal:cp.goal||'Strength',cal:{},logs:[]});
@@ -84,5 +104,5 @@ window.StrengthCloud = (() => {
     if(cloud.membership?.training_groups){const g=cloud.membership.training_groups;p.group={id:g.id,name:g.name,code:g.join_code,role:cloud.membership.role||'member'}}
     return {profile:p,week:+cp.current_week||0,workout:cp.current_workout||'A'};
   }
-  return {configured,init,session,signUp,signIn,signOut,pullUserState,pushProfile,pushCalibrations,pushWorkout,pushWorkouts,pushAll,createGroup,joinGroup,leaveGroup,toLocal};
+  return {configured,init,session,signUp,signIn,signOut,pullUserState,pushProfile,pushCalibrations,pushWorkout,pushWorkouts,pushAll,createGroup,joinGroup,leaveGroup,listMyGroups,listJoinableGroups,requestGroupJoin,listOwnedGroupRequests,respondGroupJoinRequest,toLocal};
 })();
