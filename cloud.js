@@ -56,10 +56,10 @@ window.StrengthCloud = (() => {
   }
   async function pushAll(p,week,workout){ await pushProfile(p,week,workout); await pushCalibrations(p); await pushWorkouts(p); }
   async function createGroup(name,joinCode){
-    const s=await session(); if(!s) throw new Error('Not signed in'); const uid=s.user.id;
-    const {data:g,error:e1}=await client.from('training_groups').insert({name,join_code:joinCode,owner_id:uid}).select('*').single();
-    if(e1) throw e1;
-    const {error:e2}=await client.from('group_members').insert({group_id:g.id,user_id:uid,role:'owner'});
+    const s=await session(); if(!s) throw new Error('Not signed in');
+    const {data,error}=await client.rpc('create_training_group',{p_name:name,p_join_code:joinCode});
+    if(error) throw error;
+    const {data:g,error:e2}=await client.from('training_groups').select('*').eq('id',data).single();
     if(e2) throw e2;
     return g;
   }
