@@ -32,16 +32,16 @@ details.fold{background:#15171b;border:1px solid #2b2f35;border-radius:12px;padd
 <script>
 const KEY='strength-cycle-v8';
 const OLD=['strength-cycle-standalone-v1','strength-cycle-live-v1'];
-const mainLifts=['Back Squat','Bench Press','Trap-Bar Deadlift','Straight-Bar Straight-Bar Overhead Press'];
+const mainLifts=['Back Squat','Bench Press','Trap-Bar Deadlift','Straight-Bar Overhead Press'];
 const ex={
 'Back Squat':{cat:'Main',eq:'Barbell + rack',c:['Brace before each rep','Whole foot planted','Knees track with toes','Drive the floor away'],m:['Heels lifting','Knees collapsing inward','Losing torso position'],mus:'Quads · Glutes · Adductors · Core',sub:'Hack Squat · Leg Press'},
 'Bench Press':{cat:'Main',eq:'Barbell + bench',c:['Plant feet','Set shoulder blades','Lower under control','Press up and slightly back'],m:['Bouncing off chest','Loose upper back','Feet moving'],mus:'Chest · Triceps · Front delts',sub:'Machine Chest Press · Incline DB Bench'},
 'Trap-Bar Deadlift':{cat:'Main',eq:'Trap / hex bar',c:['Stand centered','Brace before lifting','Push through floor','Finish tall'],m:['Jerking from floor','Rounding back','Leaning back at lockout'],mus:'Glutes · Quads · Hamstrings · Back',sub:'Conventional Deadlift · DB RDL'},
-'Straight-Bar Straight-Bar Overhead Press':{cat:'Main',eq:'Barbell',c:['Brace ribs down','Start near upper chest','Press overhead','Finish tall'],m:['Excessive back lean','Loose core','Partial lockout'],mus:'Shoulders · Triceps · Upper chest',sub:'Machine Shoulder Press · DB Press'},
+'Straight-Bar Overhead Press':{cat:'Main',eq:'Barbell',c:['Brace ribs down','Start near upper chest','Press overhead','Finish tall'],m:['Excessive back lean','Loose core','Partial lockout'],mus:'Shoulders · Triceps · Upper chest',sub:'Machine Shoulder Press · DB Press'},
 'Lat Pulldown':{cat:'Back',eq:'Cable',c:['Chest tall','Drive elbows down','Control return'],m:['Swinging','Pulling behind neck','Shrugging'],mus:'Lats · Upper back · Biceps',sub:'Assisted Pull-Up · Neutral Pulldown'},
 'Seated Cable Row':{cat:'Back',eq:'Cable row',c:['Sit tall','Pull elbows back','Pause briefly','Control return'],m:['Rocking torso','Shrugging'],mus:'Upper back · Lats · Biceps',sub:'Chest-Supported Row'},
-'Chest-Supported Row':{cat:'Back',eq:'Machine / incline bench',c:['Chest stays supported','Pull elbows back','Pause'],m:['Shrugging','Lifting chest off pad'],mus:'Upper back · Lats · Biceps',sub:'Cable Row · T-Bar Row'},
-'Leg Curl':{cat:'Legs',eq:'Leg curl machine',c:['Keep hips stable','Curl smoothly','Control lowering'],m:['Jerking','Lifting hips'],mus:'Hamstrings',sub:'Seated Leg Curl'},
+'Chest-Supported Dumbbell Row':{cat:'Back',eq:'Incline bench + dumbbells',c:['Chest stays supported','Pull elbows back','Pause'],m:['Shrugging','Lifting chest off pad'],mus:'Upper back · Lats · Biceps',sub:'Cable Row · T-Bar Row'},
+'Seated Leg Curl':{cat:'Legs',eq:'Seated leg curl machine',c:['Keep hips stable','Curl smoothly','Control lowering'],m:['Jerking','Lifting hips'],mus:'Hamstrings',sub:'Seated Leg Curl'},
 'Leg Press':{cat:'Legs',eq:'Leg press',c:['Whole foot planted','Control depth','Knees track with toes'],m:['Hips rolling off pad','Hard knee lockout'],mus:'Quads · Glutes',sub:'Hack Squat · Belt Squat'},
 'Hack Squat':{cat:'Legs',eq:'Hack squat machine',c:['Feet planted','Control depth','Knees track with toes'],m:['Hips lifting','Knees collapsing'],mus:'Quads · Glutes',sub:'Leg Press · Belt Squat'},
 'Bulgarian Split Squat':{cat:'Legs',eq:'Bench + dumbbells',c:['Stable stance','Front foot planted','Descend under control'],m:['Too narrow stance','Pushing off rear leg'],mus:'Quads · Glutes',sub:'Reverse Lunge · Leg Press'},
@@ -53,7 +53,8 @@ const ex={
 'DB Curl':{cat:'Arms',eq:'Dumbbells',c:['Elbows quiet','Full range','Control lowering'],m:['Swinging','Shoulders taking over'],mus:'Biceps',sub:'Hammer Curl'},
 'Hammer Curl':{cat:'Arms',eq:'Dumbbells',c:['Neutral grip','Elbows steady','Control lowering'],m:['Swinging','Elbows drifting'],mus:'Biceps · Forearms',sub:'DB Curl'},
 'Lateral Raise':{cat:'Shoulders',eq:'DB / cable / machine',c:['Soft elbow','Raise smoothly','Control down'],m:['Shrugging','Swinging','Too heavy'],mus:'Side delts',sub:'Cable Lateral Raise'},
-'Core':{cat:'Core',eq:'Floor / cable',c:['Brace first','Move under control','Breathe behind brace'],m:['Rushing','Losing position'],mus:'Core',sub:'Plank · Cable Crunch · Pallof Press'}
+'Plank':{cat:'Core',eq:'Floor / mat',c:['Elbows under shoulders','Brace glutes and abs','Keep a straight line head to heels','Breathe without losing brace'],m:['Hips sagging','Hips too high','Holding breath'],mus:'Core · Glutes · Shoulders',sub:'Cable Crunch · Pallof Press'},
+'Cable Crunch':{cat:'Core',eq:'Cable + rope',c:['Kneel with rope by head','Brace before moving','Curl ribs toward pelvis','Control the return'],m:['Pulling with arms','Sitting hips back','Using momentum'],mus:'Abdominals',sub:'Plank · Pallof Press'}
 };
 function baseProfile(id,name){return{id,name,accountId:'acct-'+Math.random().toString(36).slice(2)+Date.now().toString(36),start:'',weight:'',waist:'',height:'',goal:'Strength',checkins:[],cal:{},logs:[],tmHistory:[],applied:{},group:null,active:null,revision:1,updatedAt:new Date().toISOString()}}
 let S=null;try{S=JSON.parse(localStorage.getItem(KEY)||'null')}catch{}
@@ -165,30 +166,32 @@ function renderWork(){
  document.querySelectorAll('[data-tech]').forEach(b=>b.onclick=()=>openTech(b.dataset.tech));done.onclick=()=>{if(!p().active){if(!confirm('No sets entered. Save anyway?'))return;touch()}finish('manual')};clear.onclick=()=>{if(confirm('Clear the active workout?')){p().active=null;save();render()}}
 }
 const exerciseMedia={
-'Back Squat':{file:'Squat.png',credit:'Public domain · Wikimedia Commons'},
-'Bench Press':{file:'Bench press.webp',credit:'CC0 · Wikimedia Commons'},
-'Trap-Bar Deadlift':{file:'U.S. Army recruiter demonstrates correct way to properly lift deadlift, Gaithersburg, Maryland (2020), 2.jpg',credit:'U.S. Army · Public domain · Wikimedia Commons'},
-'Straight-Bar Straight-Bar Overhead Press':{file:'MRF-D Marines honor the fallen of 9-11 (5737025).jpg',credit:'U.S. Marine Corps · Public domain · Wikimedia Commons'},
-'Lat Pulldown':{file:'Diverging Lat Pulldown Machine.jpg',credit:'CC0 · Wikimedia Commons'},
-'Leg Press':{file:'Leg press.jpg',credit:'CC BY 2.0 · bozdoz · Wikimedia Commons'},
-'DB Curl':{file:'Bicep Curl.jpg',credit:'CC0 · Wikimedia Commons'},
-'Hammer Curl':{file:'Bicep Curl.jpg',credit:'CC0 · Wikimedia Commons'},
-'Rope Triceps':{file:'Drawsko Combat Training Center Visit (9813582).jpg',credit:'U.S. Army · Public domain · Wikimedia Commons'},
-'Incline DB Bench':{file:'Personal training instruction for Bench press.jpg',credit:'CC BY 2.0 · PTPioneer · Wikimedia Commons'},
-'Machine Chest Press':{file:'Bench press.webp',credit:'CC0 · Wikimedia Commons'},
-'Hack Squat':{file:'Squat.png',credit:'Public domain · Wikimedia Commons'},
-'Bulgarian Split Squat':{file:'Squat.png',credit:'Public domain · Wikimedia Commons'},
-'DB Romanian Deadlift':{file:'Dead Lift (5847897).jpg',credit:'U.S. Army · Public domain · Wikimedia Commons'},
-'Hip Thrust':{file:'Dead Lift (5847897).jpg',credit:'U.S. Army · Public domain · Wikimedia Commons'},
-'Seated Cable Row':{file:'U.S. Navy Cmdr. David Haas uses a rowing machine to work the same muscle groups used while swimming Aug. 17, 2009, in the Persian Gulf 090817-N-RC734-784.jpg',credit:'U.S. Navy · Public domain · Wikimedia Commons'},
-'Chest-Supported Row':{file:'U.S. Navy Cmdr. David Haas uses a rowing machine to work the same muscle groups used while swimming Aug. 17, 2009, in the Persian Gulf 090817-N-RC734-784.jpg',credit:'U.S. Navy · Public domain · Wikimedia Commons'},
-'Lateral Raise':{file:'How to do an Straight-Bar Overhead Press.jpg',credit:'Free licensed · Wikimedia Commons'},
-'Leg Curl':{file:'Leg press.jpg',credit:'CC BY 2.0 · bozdoz · Wikimedia Commons'},
-'Core':{file:'Squat.png',credit:'Public domain · Wikimedia Commons'}
+'Back Squat':{file:'Squats.svg',credit:'Everkinetic / Urutseg · CC BY-SA 3.0'},
+'Bench Press':{file:'Bench press 1.svg',credit:'Everkinetic · CC BY-SA 3.0'},
+'Trap-Bar Deadlift':{file:null,credit:'Approved reference found; copyright-safe replacement still pending'},
+'Straight-Bar Overhead Press':{file:'Barbell shoulder press 1.svg',credit:'Everkinetic · CC BY-SA 3.0'},
+'Lat Pulldown':{file:'Girl doing lat pulldown exercise.jpg',credit:'Tyler Read / PTPioneer · CC BY 2.0'},
+'Leg Press':{file:null,credit:'Approved reference found; license-safe matching image still under review'},
+'DB Curl':{file:'Standing-biceps-curl-1.gif',credit:'Everkinetic · CC BY-SA 3.0'},
+'Hammer Curl':{file:null,credit:'Approved reference found; exact dumbbell hammer-curl replacement still pending'},
+'Rope Triceps':{file:'Triceps pushdown with rope and cable 1.svg',credit:'Everkinetic · CC BY-SA 3.0'},
+'Incline DB Bench':{file:'Dumbbell incline bench press 2.svg',credit:'Everkinetic · CC BY-SA 3.0'},
+'Machine Chest Press':{file:'Girl doing chest press machine exercise.jpg',credit:'Tyler Read / PTPioneer · CC BY 2.0'},
+'Hack Squat':{file:'Hack squat machine 1.svg',credit:'Everkinetic · CC BY-SA 3.0'},
+'Bulgarian Split Squat':{file:'SETAF-AF conducts sergeant’s time circuit training (9082703).jpg',credit:'U.S. Army / Sgt. Kylejian Francia · Public Domain'},
+'DB Romanian Deadlift':{file:null,credit:'Approved reference found; dumbbell-specific license-safe replacement still pending'},
+'Hip Thrust':{file:null,credit:'Approved reference found; license-safe matching image still pending'},
+'Seated Cable Row':{file:'Seated cable rows 1.svg',credit:'Everkinetic · CC BY-SA 3.0'},
+'Chest-Supported Dumbbell Row':{file:null,credit:'Approved reference found; exact chest-supported dumbbell-row replacement still pending'},
+'Lateral Raise':{file:'Lateral dumbbell raises 1.svg',credit:'Everkinetic · CC BY-SA 3.0'},
+'Seated Leg Curl':{file:'Seated leg curl 1.svg',credit:'Everkinetic · CC BY-SA 3.0'},
+'Plank':{file:'Plank exercise.svg',credit:'Pk0001 · CC BY-SA 4.0'},
+'Cable Crunch':{file:null,credit:'Approved reference found; license-safe cable-crunch image still pending'}
 };
 function mediaUrl(file){return 'https://commons.wikimedia.org/wiki/Special:Redirect/file/'+encodeURIComponent(file)}
 function exerciseArt(name){
- const m=exerciseMedia[name]||exerciseMedia['Back Squat'];
+ const m=exerciseMedia[name];
+ if(!m||!m.file)return '<div class="exercise-art" style="display:flex;align-items:center;justify-content:center;text-align:center;padding:24px"><div><b>Reference image pending</b><div class="small muted" style="margin-top:8px">We are only publishing images after license verification.</div></div></div><div class="credit">'+(m?.credit||'Image under review')+'</div>';
  return '<img class="exercise-art" loading="lazy" src="'+mediaUrl(m.file)+'" alt="'+name+' exercise reference photo"><div class="credit">'+m.credit+'</div>';
 }
 function openTech(name){const e=ex[name];if(!e)return;techTitle.textContent=name;techMeta.textContent=e.cat+' · '+e.eq;techBody.innerHTML=exerciseArt(name)+'<div class="tech"><b>Setup & cues</b><ul><li>'+e.c.join('</li><li>')+'</li></ul><b>Common mistakes</b><ul><li>'+e.m.join('</li><li>')+'</li></ul><p><b>Muscles:</b> '+e.mus+'</p><p><b>Substitutes:</b> '+e.sub+'</p></div>';techModal.classList.remove('hidden')}
