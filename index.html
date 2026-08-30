@@ -64,7 +64,7 @@ let S=null;try{S=JSON.parse(localStorage.getItem(KEY)||'null')}catch{}
 if(!S){for(const k of OLD){try{const o=JSON.parse(localStorage.getItem(k)||'null');if(o&&o.profiles){S={profiles:o.profiles.map((x,i)=>Object.assign(baseProfile(x.id||'p'+i,x.name||'Lifter '+(i+1)),{start:x.start||x.startDate||'',weight:x.weight||x.bodyWeight||'',waist:x.waist||'',height:x.height||'',goal:x.goal||'Strength',checkins:x.checkins||[],cal:x.cal||{},logs:x.logs||x.workoutLogs||[],tmHistory:x.tmHistory||[],applied:x.appliedBlocks||{},group:x.group||null,active:x.activeSession||null})),profileId:o.profileId||o.profiles[0].id,tab:'profile',week:o.week||1,workout:o.workout||'A'};break}}catch{}}}
 if(!S)S={profiles:[baseProfile('p1','Lifter 1'),baseProfile('p2','Lifter 2')],profileId:'p1',tab:'profile',week:1,workout:'A'};
 let cloudSession=null,cloudBusy=false,cloudMessage='';
-let groupHub={mine:[],available:[],requests:[],loaded:false,error:''};
+let groupHub={mine:[],available:[],requests:[],loaded:false,error:'',status:'',updatedAt:null};
 let cloudTimer=null;
 async function cloudRefresh(){
   if(!window.StrengthCloud?.configured())return;
@@ -102,16 +102,17 @@ async function cloudLogout(){
   await window.StrengthCloud.signOut();cloudSession=null;groupHub={mine:[],available:[],requests:[],loaded:false,error:''};cloudMessage='Signed out';render();
 }
 async function loadGroupHub(rerender=true){
-  if(!cloudSession){groupHub={mine:[],available:[],requests:[],loaded:false,error:''};return}
+  if(!cloudSession){groupHub={mine:[],available:[],requests:[],loaded:false,error:'',status:'',updatedAt:null};return}
+  groupHub.status='Refreshing…';groupHub.error='';if(rerender)render();
   try{
     const [mine,available,requests]=await Promise.all([
       window.StrengthCloud.listMyGroups(),
       window.StrengthCloud.listJoinableGroups(),
       window.StrengthCloud.listOwnedGroupRequests()
     ]);
-    groupHub={mine,available,requests,loaded:true,error:''};
+    groupHub={mine,available,requests,loaded:true,error:'',status:'Updated just now',updatedAt:new Date().toISOString()};
   }catch(e){
-    console.error(e);groupHub={mine:[],available:[],requests:[],loaded:true,error:e.message||'Could not load groups'};
+    console.error(e);groupHub={mine:groupHub.mine||[],available:groupHub.available||[],requests:groupHub.requests||[],loaded:true,error:(e.message||'Could not load groups')+(e.code?' · '+e.code:''),status:'Refresh failed',updatedAt:groupHub.updatedAt||null};
   }
   if(rerender)render();
 }
@@ -121,7 +122,7 @@ function groupHubHtml(){
   const mine=groupHub.mine.length?groupHub.mine.map(g=>'<div class="history"><div class="row" style="justify-content:space-between"><div><b>'+g.group_name+'</b><div class="small muted">'+g.role+' · '+g.member_count+' member'+(g.member_count==1?'':'s')+(g.role==='owner'?' · code '+g.join_code:'')+'</div></div><button class="btn danger" data-leave-group="'+g.group_id+'">Leave</button></div></div>').join(''):'<p class="muted">You are not in any groups yet.</p>';
   const avail=groupHub.available.length?groupHub.available.map(g=>'<div class="history"><div class="row" style="justify-content:space-between"><div><b>'+g.group_name+'</b><div class="small muted">'+g.member_count+' member'+(g.member_count==1?'':'s')+'</div></div>'+(g.request_status==='pending'?'<span class="pill">Requested</span>':'<button class="btn" data-request-group="'+g.group_id+'">Ask to Join</button>')+'</div></div>').join(''):'<p class="muted">No other groups available right now.</p>';
   const req=groupHub.requests.length?'<details class="fold"><summary>Join Requests · '+groupHub.requests.length+'</summary>'+groupHub.requests.map(r=>'<div class="history"><b>'+r.requester_name+'</b><div class="small muted">wants to join '+r.group_name+'</div><div class="buttons" style="margin-top:6px"><button class="btn primary" data-approve-request="'+r.request_id+'">Approve</button><button class="btn" data-decline-request="'+r.request_id+'">Decline</button></div></div>').join('')+'</details>':'';
-  return '<details class="fold" open><summary>Training Groups</summary>'+(cloudMessage&&/group|join|request/i.test(cloudMessage)?'<p class="'+(/could not|error|failed/i.test(cloudMessage)?'bad':'good')+'">'+cloudMessage+'</p>':'')+(groupHub.error?'<p class="bad">'+groupHub.error+'</p>':'')+'<div class="row" style="justify-content:space-between"><b>My Groups</b><button class="btn" id="refreshGroups">Refresh</button></div>'+mine+'<div class="buttons" style="margin:10px 0"><button class="btn primary" id="createG">Create Group</button><button class="btn" id="joinG">Join by Code</button></div><details class="fold"><summary>Find a Group</summary>'+avail+'</details>'+req+'</details>';
+  return '<details class="fold" open><summary>Training Groups</summary>'+(cloudMessage&&/group|join|request/i.test(cloudMessage)?'<p class="'+(/could not|error|failed/i.test(cloudMessage)?'bad':'good')+'">'+cloudMessage+'</p>':'')+(groupHub.error?'<p class="bad">'+groupHub.error+'</p>':'')+'<div class="row" style="justify-content:space-between"><div><b>My Groups</b><div class="small muted">'+(groupHub.status||'')+'</div></div><button class="btn" id="refreshGroups">'+(groupHub.status==='Refreshing…'?'Refreshing…':'Refresh')+'</button></div>'+mine+'<div class="buttons" style="margin:10px 0"><button class="btn primary" id="createG">Create Group</button><button class="btn" id="joinG">Join by Code</button></div><details class="fold"><summary>Find a Group</summary>'+avail+'</details>'+req+'</details>';
 }
 async function initCloudAuth(){
   if(!window.StrengthCloud?.configured())return;
@@ -202,7 +203,7 @@ function renderProfile(){
  addP.onclick=()=>{const n=prompt('Lifter name?');if(!n)return;const q=baseProfile('p'+Date.now(),n);S.profiles.push(q);S.profileId=q.id;save();render()};
  if(document.getElementById('createG'))createG.onclick=async()=>{const n=prompt('Group name?','Strength Crew');if(!n)return;const cc=code();try{if(!cloudSession)return alert('Sign in first.');await window.StrengthCloud.createGroup(n,cc);cloudMessage='Group created.';await loadGroupHub(false);render()}catch(e){console.error(e);cloudMessage=(e.message||'Could not create group')+(e.code?' · '+e.code:'');alert(cloudMessage);render()}};
  if(document.getElementById('joinG'))joinG.onclick=async()=>{const cc=(prompt('Group code?')||'').trim().toUpperCase();if(!cc)return;try{if(!cloudSession)return alert('Sign in first.');await window.StrengthCloud.joinGroup(cc);cloudMessage='Joined group.';await loadGroupHub(false);render()}catch(e){console.error(e);cloudMessage=e.message||'Could not join group';render()}};
- if(document.getElementById('refreshGroups'))refreshGroups.onclick=()=>loadGroupHub();
+ if(document.getElementById('refreshGroups'))refreshGroups.onclick=async()=>{refreshGroups.disabled=true;await loadGroupHub();};
  document.querySelectorAll('[data-leave-group]').forEach(b=>b.onclick=async()=>{if(!confirm('Leave this group?'))return;try{await window.StrengthCloud.leaveGroup(b.dataset.leaveGroup);await loadGroupHub(false);render()}catch(e){cloudMessage=e.message||'Could not leave group';render()}});
  document.querySelectorAll('[data-request-group]').forEach(b=>b.onclick=async()=>{try{await window.StrengthCloud.requestGroupJoin(b.dataset.requestGroup);cloudMessage='Join request sent.';await loadGroupHub(false);render()}catch(e){cloudMessage=e.message||'Could not request to join';render()}});
  document.querySelectorAll('[data-approve-request]').forEach(b=>b.onclick=async()=>{try{await window.StrengthCloud.respondGroupJoinRequest(b.dataset.approveRequest,true);await loadGroupHub(false);render()}catch(e){cloudMessage=e.message||'Could not approve request';render()}});
