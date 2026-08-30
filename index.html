@@ -146,12 +146,63 @@ function finish(reason='manual'){
  p().logs.push({id:a.id,week:a.week,workout:a.workout,startedAt:a.startedAt,endedAt:end,durationMinutes:Math.max(0,Math.round((new Date(end)-new Date(a.startedAt))/60000)),completionReason:reason,items});p().active=null;save();S.tab='log';render()
 }
 function autoExpire(){const a=p().active;if(a&&(Date.now()-new Date(a.lastActivityAt))/60000>=15)finish('timeout')}
+function calibrationRamp(target){
+ const t=+target||0;
+ const w=pct=>t?round5(t*pct):'';
+ return [
+  {label:'Warm-up 1',weight:w(.45),reps:10,done:false},
+  {label:'Warm-up 2',weight:w(.60),reps:5,done:false},
+  {label:'Ramp 1',weight:w(.75),reps:3,done:false},
+  {label:'Ramp 2',weight:w(.85),reps:2,done:false}
+ ];
+}
 function renderWeek0(){
- let html='<div class="card"><div class="grid2"><label>Week<select id="wk"><option selected value="0">Week 0 · Calibration</option>'+Array.from({length:12},(_,i)=>'<option value="'+(i+1)+'">Week '+(i+1)+'</option>').join('')+'</select></label><div><div class="muted small">Purpose</div><div class="big">Set starting numbers</div></div></div><p class="muted">One clean 2–5 rep calibration set per main lift with about 1–2 reps left. No failed reps.</p></div>';
- mainLifts.forEach(l=>{const q=p().cal[l]||{};html+='<div class="card"><div class="row" style="justify-content:space-between"><b>'+l+'</b><button class="btn" data-tech="'+l+'">ⓘ Technique</button></div><div class="grid3"><label>Weight<input data-cw="'+l+'" value="'+(q.weight||'')+'" inputmode="decimal"></label><label>Reps<input data-cr="'+l+'" value="'+(q.reps||'')+'" inputmode="numeric"></label><label>RIR<input data-ci="'+l+'" value="'+(q.rir??2)+'" inputmode="numeric"></label></div><div class="row" style="margin-top:8px"><button class="btn primary" data-cal="'+l+'">Calculate & Save</button>'+(q.tm?'<span class="pill good">e1RM '+Math.round(q.e1rm)+' · TM '+q.tm+' lb</span>':'')+'</div></div>'});
- work.innerHTML=html;wk.onchange=()=>{S.week=+wk.value;save();render()};
+ let html='<div class="card"><div class="grid2"><label>Week<select id="wk"><option selected value="0">Week 0 · Calibration</option>'+Array.from({length:12},(_,i)=>'<option value="'+(i+1)+'">Week '+(i+1)+'</option>').join('')+'</select></label><div><div class="muted small">Purpose</div><div class="big">Build a safe starting max</div></div></div><p class="muted">For each main lift: warm up, ramp gradually, then finish with one clean 2–5 rep calibration set. Stop with about 1–2 good reps still available. No failed reps.</p></div>';
+ mainLifts.forEach((l,li)=>{
+  const q=p().cal[l]||{}, target=q.targetGuess||q.weight||'', ramp=(q.ramp&&q.ramp.length?q.ramp:calibrationRamp(target));
+  html+='<div class="card"><div class="row" style="justify-content:space-between"><div><b>'+l+'</b><div class="small muted">Guided calibration</div></div><button class="btn" data-tech="'+l+'">ⓘ Technique</button></div>'+
+  '<label style="display:block;margin-top:10px">Rough target for your final 2–5 rep set<input data-target="'+l+'" value="'+target+'" inputmode="decimal" placeholder="Example: 185"></label>'+
+  '<div class="small muted" style="margin:6px 0 10px">This is only a starting guess. Change any suggested weight as you warm up.</div>'+
+  '<button class="btn" data-ramp="'+l+'">Build / Rebuild Ramp</button>'+
+  '<div class="lift"><b>Warm-up & ramp sets</b>';
+  ramp.forEach((rs,ri)=>{html+='<div class="set"><b>'+(ri+1)+'</b><input data-rw="'+l+'" data-ri="'+ri+'" value="'+(rs.weight||'')+'" inputmode="decimal" placeholder="lb"><input data-rr="'+l+'" data-ri="'+ri+'" value="'+(rs.reps||'')+'" inputmode="numeric" placeholder="reps"><span class="small muted">'+rs.label+'</span><input data-rd="'+l+'" data-ri="'+ri+'" type="checkbox" '+(rs.done?'checked':'')+'></div>'});
+  html+='</div><div class="lift"><b>Final calibration set</b><p class="small muted">After the ramp, choose a challenging weight you can perform for 2–5 clean reps with roughly 1–2 reps still in reserve.</p>'+
+  '<div class="grid3"><label>Final weight<input data-cw="'+l+'" value="'+(q.weight||target||'')+'" inputmode="decimal"></label><label>Reps<input data-cr="'+l+'" value="'+(q.reps||'')+'" inputmode="numeric" placeholder="2–5"></label><label>RIR<input data-ci="'+l+'" value="'+(q.rir??2)+'" inputmode="numeric" placeholder="1–2"></label></div>'+
+  '<div class="row" style="margin-top:8px"><button class="btn primary" data-cal="'+l+'">Calculate & Save Calibration</button>'+(q.tm?'<span class="pill good">e1RM '+Math.round(q.e1rm)+' · Training Max '+q.tm+' lb</span>':'')+'</div></div></div>';
+ });
+ work.innerHTML=html;
+ wk.onchange=()=>{S.week=+wk.value;save();render()};
  document.querySelectorAll('[data-tech]').forEach(b=>b.onclick=()=>openTech(b.dataset.tech));
- document.querySelectorAll('[data-cal]').forEach(b=>b.onclick=()=>{const l=b.dataset.cal,w=+document.querySelector('[data-cw="'+l+'"]').value,r=+document.querySelector('[data-cr="'+l+'"]').value,rir=document.querySelector('[data-ci="'+l+'"]').value;if(!w||!r)return alert('Enter weight and reps.');const ee=e1rm(w,r);p().cal[l]={weight:w,reps:r,rir,e1rm:ee,tm:trainingMax(ee)};save();render()})
+ document.querySelectorAll('[data-ramp]').forEach(b=>b.onclick=()=>{
+   const l=b.dataset.ramp,target=+document.querySelector('[data-target="'+l+'"]').value;
+   if(!target)return alert('Enter a rough target weight first.');
+   p().cal[l]=Object.assign({},p().cal[l]||{},{targetGuess:target,ramp:calibrationRamp(target)});
+   save();render();
+ });
+ document.querySelectorAll('[data-rw],[data-rr],[data-rd]').forEach(el=>{
+   const handler=()=>{
+     const l=el.dataset.rw||el.dataset.rr||el.dataset.rd,ri=+el.dataset.ri;
+     const q=p().cal[l]=p().cal[l]||{};
+     if(!q.ramp||!q.ramp.length)q.ramp=calibrationRamp(q.targetGuess||q.weight||0);
+     q.ramp[ri]=q.ramp[ri]||{label:ri<2?'Warm-up':'Ramp'};
+     if(el.dataset.rw!==undefined)q.ramp[ri].weight=el.value;
+     if(el.dataset.rr!==undefined)q.ramp[ri].reps=el.value;
+     if(el.dataset.rd!==undefined)q.ramp[ri].done=el.checked;
+     save();
+   };
+   el.addEventListener('input',handler);el.addEventListener('change',handler);
+ });
+ document.querySelectorAll('[data-target]').forEach(el=>el.addEventListener('change',()=>{
+   const l=el.dataset.target,q=p().cal[l]=p().cal[l]||{};q.targetGuess=el.value;save();
+ }));
+ document.querySelectorAll('[data-cal]').forEach(b=>b.onclick=()=>{
+   const l=b.dataset.cal,w=+document.querySelector('[data-cw="'+l+'"]').value,r=+document.querySelector('[data-cr="'+l+'"]').value,rir=document.querySelector('[data-ci="'+l+'"]').value;
+   if(!w||!r)return alert('Enter the final calibration weight and reps.');
+   if(r<2||r>5)return alert('Use 2–5 clean reps for the calibration set.');
+   const ee=e1rm(w,r),q=p().cal[l]||{};
+   p().cal[l]=Object.assign({},q,{targetGuess:q.targetGuess||w,weight:w,reps:r,rir,e1rm:ee,tm:trainingMax(ee),completedAt:new Date().toISOString()});
+   save();render();
+ })
 }
 function renderWork(){
  if(+S.week===0){renderWeek0();return}
