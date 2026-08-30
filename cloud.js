@@ -41,7 +41,7 @@ window.StrengthCloud = (() => {
   }
   async function pushCalibrations(p){
     const s=await session(); if(!s) throw new Error('Not signed in'); const uid=s.user.id;
-    const rows=Object.entries(p.cal||{}).map(([lift,c])=>({user_id:uid,lift,weight:+c.weight,reps:+c.reps,rir:String(c.rir??''),e1rm:+c.e1rm,training_max:+c.tm,updated_at:new Date().toISOString()}));
+    const rows=Object.entries(p.cal||{}).map(([lift,c])=>({user_id:uid,lift,weight:+c.weight,reps:+c.reps,rir:String(c.rir??''),e1rm:+c.e1rm,training_max:+c.tm,target_guess:c.targetGuess?+c.targetGuess:null,ramp_sets:c.ramp||[],updated_at:new Date().toISOString()}));
     if(!rows.length) return; const {error}=await client.from('calibrations').upsert(rows); if(error) throw error;
   }
   async function pushWorkout(log){
