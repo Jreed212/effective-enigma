@@ -24,6 +24,8 @@ create table if not exists public.calibrations (
   rir text,
   e1rm numeric not null,
   training_max numeric not null,
+  target_guess numeric,
+  ramp_sets jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now(),
   primary key (user_id, lift)
 );
