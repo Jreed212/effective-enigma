@@ -14,7 +14,7 @@ input,select{width:100%;background:#101216;color:#fff;border:1px solid #373b43;b
 .lift{border-top:1px solid #2d3138;padding-top:13px;margin-top:13px}.set{display:grid;grid-template-columns:36px 1fr 1fr 70px 38px;gap:6px;align-items:center;margin:7px 0}.set input,.set select{padding:8px}.set input[type=checkbox]{width:20px;height:20px}
 .pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#282c32;font-size:12px}.good{color:#73dd98}.warn{color:#ffd177}.bad{color:#ff8585}.pr{color:#ffe18a;font-weight:850}
 .hidden{display:none}.history{border-top:1px solid #2c3037;padding:10px 0}.dict button{width:100%;text-align:left;margin:6px 0}.tech{background:#202329;border:1px solid #343841;border-radius:12px;padding:12px;margin-top:10px}
-.exercise-art{width:100%;max-width:520px;aspect-ratio:16/9;background:#0f1114;border:1px solid #30343b;border-radius:14px;display:block;margin:10px auto}
+.exercise-art{width:100%;max-width:520px;max-height:360px;object-fit:contain;background:#0f1114;border:1px solid #30343b;border-radius:14px;display:block;margin:10px auto}.credit{text-align:center;font-size:11px;color:#8f959e;margin-top:-5px}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:100;display:flex;align-items:flex-end;justify-content:center;padding:12px}.modal.hidden{display:none}
 .modal-card{background:#17191d;border:1px solid #353942;border-radius:18px 18px 12px 12px;width:min(760px,100%);max-height:88vh;overflow:auto;padding:16px}
 .modal-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.xbtn{font-size:24px;background:#282c32;color:#fff;border:0;border-radius:10px;padding:4px 10px}
@@ -164,24 +164,32 @@ function renderWork(){
  document.querySelectorAll('[data-wt],[data-rp],[data-dn],[data-final]').forEach(el=>{const fn=()=>{const aa=touch();const key=(el.dataset.wt||el.dataset.rp||el.dataset.dn||el.dataset.final);if(el.dataset.final!==undefined){aa.items[key]=aa.items[key]||{sets:{}};aa.items[key].rir=el.value}else{const [ix,si]=key.split('-');aa.items[ix]=aa.items[ix]||{sets:{},rir:''};aa.items[ix].sets[si]=aa.items[ix].sets[si]||{};const z=aa.items[ix].sets[si];if(el.dataset.wt!==undefined)z.weight=el.value;if(el.dataset.rp!==undefined)z.reps=el.value;if(el.dataset.dn!==undefined)z.done=el.checked;z.touched=true}aa.lastActivityAt=new Date().toISOString();save()};el.addEventListener('input',fn);el.addEventListener('change',fn)});
  document.querySelectorAll('[data-tech]').forEach(b=>b.onclick=()=>openTech(b.dataset.tech));done.onclick=()=>{if(!p().active){if(!confirm('No sets entered. Save anyway?'))return;touch()}finish('manual')};clear.onclick=()=>{if(confirm('Clear the active workout?')){p().active=null;save();render()}}
 }
-function artType(name){
- if(/Squat|Leg Press/.test(name))return'squat';if(/Bench|Chest Press/.test(name))return'press';if(/Deadlift|Romanian/.test(name))return'hinge';if(/Overhead Press/.test(name))return'ohp';if(/Pulldown|Pull-Up/.test(name))return'pull';if(/Row/.test(name))return'row';if(/Curl/.test(name)&&!/Leg Curl/.test(name))return'curl';if(/Triceps/.test(name))return'triceps';if(/Lateral Raise/.test(name))return'raise';if(/Hip Thrust/.test(name))return'hip';if(/Leg Curl/.test(name))return'legcurl';return'core';
-}
+const exerciseMedia={
+'Back Squat':{file:'Squat.png',credit:'Public domain · Wikimedia Commons'},
+'Bench Press':{file:'Bench press.webp',credit:'CC0 · Wikimedia Commons'},
+'Trap-Bar Deadlift':{file:'U.S. Army recruiter demonstrates correct way to properly lift deadlift, Gaithersburg, Maryland (2020), 2.jpg',credit:'U.S. Army · Public domain · Wikimedia Commons'},
+'Overhead Press':{file:'MRF-D Marines honor the fallen of 9-11 (5737025).jpg',credit:'U.S. Marine Corps · Public domain · Wikimedia Commons'},
+'Lat Pulldown':{file:'Diverging Lat Pulldown Machine.jpg',credit:'CC0 · Wikimedia Commons'},
+'Leg Press':{file:'Leg press.jpg',credit:'CC BY 2.0 · bozdoz · Wikimedia Commons'},
+'DB Curl':{file:'Bicep Curl.jpg',credit:'CC0 · Wikimedia Commons'},
+'Hammer Curl':{file:'Bicep Curl.jpg',credit:'CC0 · Wikimedia Commons'},
+'Rope Triceps':{file:'Drawsko Combat Training Center Visit (9813582).jpg',credit:'U.S. Army · Public domain · Wikimedia Commons'},
+'Incline DB Bench':{file:'Personal training instruction for Bench press.jpg',credit:'CC BY 2.0 · PTPioneer · Wikimedia Commons'},
+'Machine Chest Press':{file:'Bench press.webp',credit:'CC0 · Wikimedia Commons'},
+'Hack Squat':{file:'Squat.png',credit:'Public domain · Wikimedia Commons'},
+'Bulgarian Split Squat':{file:'Squat.png',credit:'Public domain · Wikimedia Commons'},
+'DB Romanian Deadlift':{file:'Dead Lift (5847897).jpg',credit:'U.S. Army · Public domain · Wikimedia Commons'},
+'Hip Thrust':{file:'Dead Lift (5847897).jpg',credit:'U.S. Army · Public domain · Wikimedia Commons'},
+'Seated Cable Row':{file:'U.S. Navy Cmdr. David Haas uses a rowing machine to work the same muscle groups used while swimming Aug. 17, 2009, in the Persian Gulf 090817-N-RC734-784.jpg',credit:'U.S. Navy · Public domain · Wikimedia Commons'},
+'Chest-Supported Row':{file:'U.S. Navy Cmdr. David Haas uses a rowing machine to work the same muscle groups used while swimming Aug. 17, 2009, in the Persian Gulf 090817-N-RC734-784.jpg',credit:'U.S. Navy · Public domain · Wikimedia Commons'},
+'Lateral Raise':{file:'How to do an Overhead Press.jpg',credit:'Free licensed · Wikimedia Commons'},
+'Leg Curl':{file:'Leg press.jpg',credit:'CC BY 2.0 · bozdoz · Wikimedia Commons'},
+'Core':{file:'Squat.png',credit:'Public domain · Wikimedia Commons'}
+};
+function mediaUrl(file){return 'https://commons.wikimedia.org/wiki/Special:Redirect/file/'+encodeURIComponent(file)}
 function exerciseArt(name){
- const t=artType(name),s='#f0f2f5',a='#e23a49',g='#7f8792';const head=(x,y)=>'<circle cx="'+x+'" cy="'+y+'" r="12" fill="none" stroke="'+s+'" stroke-width="5"/>';const ln=(x1,y1,x2,y2,w=6,col=s)=>'<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+col+'" stroke-width="'+w+'" stroke-linecap="round"/>';let d='';
- if(t==='squat')d=head(105,58)+ln(105,72,105,132)+ln(105,92,70,112)+ln(105,92,140,112)+ln(105,132,72,178)+ln(105,132,145,168)+ln(48,42,162,42,7,a);
- else if(t==='press')d=ln(45,145,170,145,7,g)+head(92,116)+ln(80,124,135,124)+ln(70,126,55,85)+ln(135,124,150,85)+ln(42,82,165,82,7,a)+ln(92,130,55,145)+ln(120,130,155,145);
- else if(t==='hinge')d=head(100,64)+ln(98,77,135,120)+ln(135,120,105,170)+ln(135,120,165,168)+ln(120,101,75,128)+ln(75,128,65,158)+ln(52,160,175,160,7,a);
- else if(t==='ohp')d=head(105,78)+ln(105,92,105,150)+ln(105,112,70,62)+ln(105,112,140,62)+ln(52,52,158,52,7,a)+ln(105,150,80,190)+ln(105,150,132,190);
- else if(t==='pull')d=head(105,94)+ln(105,108,105,162)+ln(105,120,72,70)+ln(105,120,140,70)+ln(52,54,158,54,7,a)+ln(105,162,78,194)+ln(105,162,134,194);
- else if(t==='row')d=head(80,82)+ln(88,94,135,126)+ln(135,126,105,176)+ln(135,126,168,176)+ln(100,105,62,135)+ln(62,135,45,135,7,a)+ln(121,116,160,135)+ln(160,135,178,135,7,a);
- else if(t==='curl')d=head(105,58)+ln(105,72,105,145)+ln(105,92,72,120)+ln(72,120,90,100,7,a)+ln(105,92,138,120)+ln(138,120,120,100,7,a)+ln(105,145,80,190)+ln(105,145,132,190);
- else if(t==='triceps')d=head(105,58)+ln(105,72,105,145)+ln(105,90,135,112)+ln(135,112,135,155,7,a)+ln(105,90,75,112)+ln(75,112,75,155,7,a)+ln(105,145,80,190)+ln(105,145,132,190);
- else if(t==='raise')d=head(105,58)+ln(105,72,105,145)+ln(105,96,48,96,7,a)+ln(105,96,162,96,7,a)+ln(105,145,80,190)+ln(105,145,132,190);
- else if(t==='hip')d=ln(35,150,105,150,7,g)+head(92,116)+ln(82,126,135,126)+ln(135,126,160,155)+ln(82,126,58,156)+ln(58,156,36,184)+ln(160,155,184,184)+ln(80,120,142,120,7,a);
- else if(t==='legcurl')d=ln(42,142,158,142,7,g)+head(70,112)+ln(82,120,135,120)+ln(135,120,165,145)+ln(165,145,145,178,7,a)+ln(82,120,55,142);
- else d=head(105,58)+ln(105,72,105,142)+ln(105,95,72,128)+ln(105,95,138,128)+ln(105,142,78,188)+ln(105,142,132,188);
- return '<svg class="exercise-art" viewBox="0 0 210 210" role="img" aria-label="'+name+' technique illustration"><rect width="210" height="210" fill="#0f1114"/>'+d+'<text x="105" y="204" fill="#9ca1a9" font-size="10" text-anchor="middle">'+name+'</text></svg>';
+ const m=exerciseMedia[name]||exerciseMedia['Back Squat'];
+ return '<img class="exercise-art" loading="lazy" src="'+mediaUrl(m.file)+'" alt="'+name+' exercise reference photo"><div class="credit">'+m.credit+'</div>';
 }
 function openTech(name){const e=ex[name];if(!e)return;techTitle.textContent=name;techMeta.textContent=e.cat+' · '+e.eq;techBody.innerHTML=exerciseArt(name)+'<div class="tech"><b>Setup & cues</b><ul><li>'+e.c.join('</li><li>')+'</li></ul><b>Common mistakes</b><ul><li>'+e.m.join('</li><li>')+'</li></ul><p><b>Muscles:</b> '+e.mus+'</p><p><b>Substitutes:</b> '+e.sub+'</p></div>';techModal.classList.remove('hidden')}
 function renderDict(){dict.innerHTML='<div class="card"><h2>Exercise Dictionary</h2><p class="muted">Reference only. The illustrations stay out of the workout unless you ask for them.</p></div>'+Object.keys(ex).sort().map(n=>'<div class="card"><div class="row" style="justify-content:space-between"><div><b>'+n+'</b><div class="small muted">'+ex[n].cat+' · '+ex[n].eq+'</div></div><button class="btn" data-dict="'+n+'">Technique</button></div>'+exerciseArt(n)+'</div>').join('');document.querySelectorAll('[data-dict]').forEach(b=>b.onclick=()=>openTech(b.dataset.dict))}
