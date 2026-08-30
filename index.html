@@ -29,6 +29,9 @@ details.fold{background:#15171b;border:1px solid #2b2f35;border-radius:12px;padd
 <input id="importFile" class="hidden" type="file" accept="application/json">
 <div id="techModal" class="modal hidden"><div class="modal-card"><div class="modal-head"><div><div id="techTitle" class="big"></div><div id="techMeta" class="muted small"></div></div><button id="closeTech" class="xbtn">×</button></div><div id="techBody"></div></div></div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="cloud-config.js"></script>
+<script src="cloud.js"></script>
 <script>
 const KEY='strength-cycle-v8';
 const OLD=['strength-cycle-standalone-v1','strength-cycle-live-v1'];
@@ -60,8 +63,54 @@ function baseProfile(id,name){return{id,name,accountId:'acct-'+Math.random().toS
 let S=null;try{S=JSON.parse(localStorage.getItem(KEY)||'null')}catch{}
 if(!S){for(const k of OLD){try{const o=JSON.parse(localStorage.getItem(k)||'null');if(o&&o.profiles){S={profiles:o.profiles.map((x,i)=>Object.assign(baseProfile(x.id||'p'+i,x.name||'Lifter '+(i+1)),{start:x.start||x.startDate||'',weight:x.weight||x.bodyWeight||'',waist:x.waist||'',height:x.height||'',goal:x.goal||'Strength',checkins:x.checkins||[],cal:x.cal||{},logs:x.logs||x.workoutLogs||[],tmHistory:x.tmHistory||[],applied:x.appliedBlocks||{},group:x.group||null,active:x.activeSession||null})),profileId:o.profileId||o.profiles[0].id,tab:'profile',week:o.week||1,workout:o.workout||'A'};break}}catch{}}}
 if(!S)S={profiles:[baseProfile('p1','Lifter 1'),baseProfile('p2','Lifter 2')],profileId:'p1',tab:'profile',week:1,workout:'A'};
+let cloudSession=null,cloudBusy=false,cloudMessage='';
+let cloudTimer=null;
+async function cloudRefresh(){
+  if(!window.StrengthCloud?.configured())return;
+  window.StrengthCloud.init();
+  cloudSession=await window.StrengthCloud.session();
+}
+function scheduleCloudSync(){
+  if(!cloudSession||cloudBusy)return;
+  clearTimeout(cloudTimer);
+  cloudTimer=setTimeout(async()=>{
+    try{cloudBusy=true;await window.StrengthCloud.pushAll(p(),S.week,S.workout);cloudMessage='Synced';}
+    catch(e){console.error(e);cloudMessage='Sync error';}
+    finally{cloudBusy=false}
+  },700);
+}
+async function cloudLogin(email,password,mode){
+  try{
+    cloudBusy=true;cloudMessage='';
+    const res=mode==='signup'?await window.StrengthCloud.signUp(email,password):await window.StrengthCloud.signIn(email,password);
+    if(res.error)throw res.error;
+    cloudSession=res.data.session||await window.StrengthCloud.session();
+    if(!cloudSession){cloudMessage='Account created. Check your email to confirm, then sign in.';return}
+    const remote=await window.StrengthCloud.pullUserState();
+    if(remote?.profile){
+      const mapped=window.StrengthCloud.toLocal(remote,p());
+      const oldId=S.profileId; mapped.profile.id=oldId; S.profiles=S.profiles.map(x=>x.id===oldId?mapped.profile:x);
+      S.week=mapped.week;S.workout=mapped.workout;localStorage.setItem(KEY,JSON.stringify(S));cloudMessage='Cloud profile loaded.';
+    }else{
+      await window.StrengthCloud.pushAll(p(),S.week,S.workout);cloudMessage='Local profile moved to cloud.';
+    }
+  }catch(e){console.error(e);cloudMessage=e.message||'Account error'}
+  finally{cloudBusy=false;render()}
+}
+async function cloudLogout(){
+  await window.StrengthCloud.signOut();cloudSession=null;cloudMessage='Signed out';render();
+}
+async function initCloudAuth(){
+  if(!window.StrengthCloud?.configured())return;
+  try{await cloudRefresh();if(cloudSession){const remote=await window.StrengthCloud.pullUserState();if(remote?.profile){const mapped=window.StrengthCloud.toLocal(remote,p());const oldId=S.profileId;mapped.profile.id=oldId;S.profiles=S.profiles.map(x=>x.id===oldId?mapped.profile:x);S.week=mapped.week;S.workout=mapped.workout;localStorage.setItem(KEY,JSON.stringify(S));cloudMessage='Cloud sync active';render()}}}catch(e){console.error(e);cloudMessage='Cloud connection needs attention'}
+}
+function cloudAccountHtml(){
+  if(!window.StrengthCloud?.configured())return '<div class="card"><b>Cloud Sync</b><p class="muted">Cloud backend not configured yet.</p></div>';
+  if(cloudSession)return '<div class="card"><div class="row" style="justify-content:space-between"><div><b>Cloud Account</b><div class="small good">'+(cloudSession.user.email||'Signed in')+'</div></div><button class="btn" id="cloudSignOut">Sign Out</button></div><p class="small muted">'+(cloudMessage||'Your profile, calibration, and workout history sync across devices.')+'</p></div>';
+  return '<div class="card"><b>Cloud Account</b><p class="muted">Sign in on every device to use the same profile and workout history.</p><div class="grid2"><label>Email<input id="cloudEmail" type="email" autocomplete="email"></label><label>Password<input id="cloudPass" type="password" autocomplete="current-password"></label></div><div class="buttons" style="margin-top:10px"><button class="btn primary" id="cloudSignIn">Sign In</button><button class="btn" id="cloudSignUp">Create Account</button></div><p class="small muted">'+(cloudMessage||'')+'</p></div>';
+}
 function p(){return S.profiles.find(x=>x.id===S.profileId)||S.profiles[0]}
-function save(){p().revision=(p().revision||0)+1;p().updatedAt=new Date().toISOString();localStorage.setItem(KEY,JSON.stringify(S))}
+function save(){p().revision=(p().revision||0)+1;p().updatedAt=new Date().toISOString();localStorage.setItem(KEY,JSON.stringify(S));scheduleCloudSync()}
 function slug(s){return s.toLowerCase().replace(/[^a-z0-9]+/g,'-')}
 function e1rm(w,r){return w*(1+r/30)}
 function round5(n){return Math.round(n/5)*5}
@@ -121,7 +170,7 @@ function renderHome(){
  openNext.onclick=()=>{S.week=c<4?0:n.week;S.workout=n.w;S.tab='work';save();render()}
 }
 function renderProfile(){
- const x=p(),g=x.group;profile.innerHTML='<div class="card"><div class="grid2"><label>Name<input id="nm" value="'+x.name+'"></label><label>Program start<input id="st" type="date" value="'+(x.start||'')+'"></label><label>Body weight (lb)<input id="bw" value="'+(x.weight||'')+'" inputmode="decimal"></label><label>Waist (in)<input id="wa" value="'+(x.waist||'')+'" inputmode="decimal"></label><label>Height<input id="ht" value="'+(x.height||'')+'"></label><label>Goal<input id="go" value="'+(x.goal||'Strength')+'"></label></div><div class="buttons" style="margin-top:12px"><button class="btn primary" id="saveP">Save Profile</button><button class="btn" id="check">Add Check-In</button><button class="btn" id="addP">Add Lifter</button></div></div>'+
+ const x=p(),g=x.group;profile.innerHTML=cloudAccountHtml()+'<div class="card"><div class="grid2"><label>Name<input id="nm" value="'+x.name+'"></label><label>Program start<input id="st" type="date" value="'+(x.start||'')+'"></label><label>Body weight (lb)<input id="bw" value="'+(x.weight||'')+'" inputmode="decimal"></label><label>Waist (in)<input id="wa" value="'+(x.waist||'')+'" inputmode="decimal"></label><label>Height<input id="ht" value="'+(x.height||'')+'"></label><label>Goal<input id="go" value="'+(x.goal||'Strength')+'"></label></div><div class="buttons" style="margin-top:12px"><button class="btn primary" id="saveP">Save Profile</button><button class="btn" id="check">Add Check-In</button><button class="btn" id="addP">Add Lifter</button></div></div>'+
  '<details class="fold"><summary>Check-In History</summary>'+((x.checkins||[]).length?(x.checkins||[]).slice().reverse().map(c=>'<div class="history"><b>'+c.date+'</b><div class="small muted">'+(c.weight?c.weight+' lb ':'')+(c.waist?'· '+c.waist+' in waist ':'')+(c.note?'· '+c.note:'')+'</div></div>').join(''):'<p class="muted">No check-ins yet.</p>')+'</details>'+
  '<details class="fold" open><summary>Training Group</summary>'+(g?'<div class="big">'+g.name+'</div><p>Code <b>'+g.code+'</b> · '+g.role+'</p>':'<p class="muted">Group codes are local for now; true live multi-phone syncing comes with the cloud backend.</p>')+'<div class="buttons"><button class="btn" id="createG">Create Group</button><button class="btn" id="joinG">Join Group</button>'+(g?'<button class="btn danger" id="leaveG">Leave</button>':'')+'</div></details>'+
  '<details class="fold"><summary>Backup / Move Data</summary><p class="muted">Useful until cloud sync is connected.</p><div class="buttons"><button class="btn" id="exportP">Export This Lifter</button><button class="btn" id="exportA">Full Backup</button><button class="btn" id="importP">Import Lifter</button></div></details>';
@@ -131,7 +180,10 @@ function renderProfile(){
  createG.onclick=()=>{const n=prompt('Group name?','Strength Crew');if(!n)return;x.group={name:n,code:code(),role:'owner'};save();render()};
  joinG.onclick=()=>{const cc=(prompt('Group code?')||'').trim().toUpperCase();if(!cc)return;const n=prompt('Group name?','Training Group')||'Training Group';x.group={name:n,code:cc,role:'member'};save();render()};
  if(g)leaveG.onclick=()=>{if(confirm('Leave group?')){x.group=null;save();render()}};
- exportP.onclick=()=>download(slug(x.name)+'-strength-cycle.json',{type:'profile',profile:x});exportA.onclick=()=>download('strength-cycle-backup.json',{type:'full',state:S});importP.onclick=()=>importFile.click()
+ exportP.onclick=()=>download(slug(x.name)+'-strength-cycle.json',{type:'profile',profile:x});exportA.onclick=()=>download('strength-cycle-backup.json',{type:'full',state:S});importP.onclick=()=>importFile.click();
+ if(document.getElementById('cloudSignIn'))cloudSignIn.onclick=()=>cloudLogin(cloudEmail.value.trim(),cloudPass.value,'signin');
+ if(document.getElementById('cloudSignUp'))cloudSignUp.onclick=()=>cloudLogin(cloudEmail.value.trim(),cloudPass.value,'signup');
+ if(document.getElementById('cloudSignOut'))cloudSignOut.onclick=cloudLogout;
 }
 function renderCal(){
  cal.innerHTML='<div class="card"><h2>Week 0 Calibration</h2><p class="muted">Use one clean 2–5 rep set with about 1–2 reps still available. No failed reps.</p>'+
@@ -271,6 +323,6 @@ importFile.onchange=e=>{const f=e.target.files?.[0];if(!f)return;const r=new Fil
 function render(){autoExpire();nav();renderHome();renderProfile();renderWork();renderProgress();renderDict()}
 who.onchange=e=>{S.profileId=e.target.value;save();render()};document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;save();render()});
 closeTech.onclick=()=>techModal.classList.add('hidden');techModal.onclick=e=>{if(e.target===techModal)techModal.classList.add('hidden')};
-render();setInterval(autoExpire,60000);
+render();initCloudAuth();setInterval(autoExpire,60000);
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js').catch(()=>{}));
 </script></body></html>
