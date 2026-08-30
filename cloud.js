@@ -49,5 +49,17 @@ window.StrengthCloud = (() => {
     const row={id:log.id,user_id:uid,week:log.week,workout:log.workout,started_at:log.startedAt,ended_at:log.endedAt,duration_minutes:log.durationMinutes||0,completion_reason:log.completionReason||'manual',items:log.items||[],updated_at:new Date().toISOString()};
     const {error}=await client.from('workout_logs').upsert(row); if(error) throw error;
   }
-  return {configured,init,session,signUp,signIn,signOut,pullUserState,pushProfile,pushCalibrations,pushWorkout};
+  async function pushWorkouts(p){
+    const s=await session(); if(!s) throw new Error('Not signed in'); const uid=s.user.id;
+    const rows=(p.logs||[]).filter(l=>l.id&&l.startedAt&&l.endedAt).map(l=>({id:l.id,user_id:uid,week:+l.week,workout:l.workout,started_at:l.startedAt,ended_at:l.endedAt,duration_minutes:+l.durationMinutes||0,completion_reason:l.completionReason||'manual',items:l.items||[],updated_at:new Date().toISOString()}));
+    if(!rows.length)return; const {error}=await client.from('workout_logs').upsert(rows); if(error) throw error;
+  }
+  async function pushAll(p,week,workout){ await pushProfile(p,week,workout); await pushCalibrations(p); await pushWorkouts(p); }
+  function toLocal(cloud,base){
+    const cp=cloud.profile||{}, p=Object.assign({},base,{id:'cloud-'+cloud.user.id,accountId:cloud.user.id,name:cp.display_name||base.name||'Lifter',start:cp.program_start||'',weight:cp.body_weight??'',waist:cp.waist??'',height:cp.height||'',goal:cp.goal||'Strength',cal:{},logs:[]});
+    for(const x of cloud.calibrations||[])p.cal[x.lift]={weight:x.weight,reps:x.reps,rir:x.rir,e1rm:x.e1rm,tm:x.training_max,targetGuess:x.target_guess||'',ramp:x.ramp_sets||[]};
+    p.logs=(cloud.logs||[]).map(l=>({id:l.id,week:l.week,workout:l.workout,startedAt:l.started_at,endedAt:l.ended_at,durationMinutes:l.duration_minutes,completionReason:l.completion_reason,items:l.items||[]}));
+    return {profile:p,week:+cp.current_week||0,workout:cp.current_workout||'A'};
+  }
+  return {configured,init,session,signUp,signIn,signOut,pullUserState,pushProfile,pushCalibrations,pushWorkout,pushWorkouts,pushAll,toLocal};
 })();
