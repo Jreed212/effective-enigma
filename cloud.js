@@ -59,17 +59,13 @@ window.StrengthCloud = (() => {
     const s=await session(); if(!s) throw new Error('Not signed in');
     const {data,error}=await client.rpc('create_training_group',{p_name:name,p_join_code:joinCode});
     if(error) throw error;
-    const {data:g,error:e2}=await client.from('training_groups').select('*').eq('id',data).single();
-    if(e2) throw e2;
-    return g;
+    return {id:data,name,join_code:String(joinCode).toUpperCase(),owner_id:s.user.id};
   }
   async function joinGroup(joinCode){
     const s=await session(); if(!s) throw new Error('Not signed in');
     const {data:gid,error}=await client.rpc('join_training_group',{p_code:joinCode});
     if(error) throw error;
-    const {data:g,error:e2}=await client.from('training_groups').select('*').eq('id',gid).single();
-    if(e2) throw e2;
-    return g;
+    return {id:gid,join_code:String(joinCode).toUpperCase()};
   }
   async function leaveGroup(groupId){
     const s=await session(); if(!s) throw new Error('Not signed in'); const uid=s.user.id;
