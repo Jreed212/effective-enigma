@@ -94,7 +94,7 @@ async function cloudLogin(email,password,mode){
     }else{
       await window.StrengthCloud.pushAll(p(),S.week,S.workout);cloudMessage='Local profile moved to cloud.';
     }
-  }catch(e){console.error(e);cloudMessage=e.message||'Account error'}
+  }catch(e){console.error(e);cloudMessage=(e.message||'Account error')+(e.code?' · '+e.code:'')+(e.status?' · HTTP '+e.status:'')}
   finally{cloudBusy=false;render()}
 }
 async function cloudLogout(){
