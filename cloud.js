@@ -28,10 +28,10 @@ window.StrengthCloud = (() => {
       client.from('checkins').select('*').eq('user_id',uid).order('checkin_date'),
       client.from('workout_logs').select('*').eq('user_id',uid).order('started_at'),
       client.from('tm_history').select('*').eq('user_id',uid).order('created_at'),
-      client.from('group_members').select('group_id,role,training_groups(id,name,join_code,owner_id)').eq('user_id',uid).maybeSingle()
+      client.from('group_members').select('group_id,role,training_groups(id,name,join_code,owner_id)').eq('user_id',uid)
     ]);
     if(profile.error) throw profile.error;
-    return {user:s.user,profile:profile.data,calibrations:cal.data||[],checkins:checkins.data||[],logs:logs.data||[],tmHistory:tm.data||[],membership:member.data||null};
+    return {user:s.user,profile:profile.data,calibrations:cal.data||[],checkins:checkins.data||[],logs:logs.data||[],tmHistory:tm.data||[],memberships:member.data||[]};
   }
 
   async function pushProfile(p,week=0,workout='A'){
@@ -101,7 +101,7 @@ async function listMyGroups(){
     const cp=cloud.profile||{}, p=Object.assign({},base,{id:'cloud-'+cloud.user.id,accountId:cloud.user.id,name:cp.display_name||base.name||'Lifter',start:cp.program_start||'',weight:cp.body_weight??'',waist:cp.waist??'',height:cp.height||'',goal:cp.goal||'Strength',cal:{},logs:[]});
     for(const x of cloud.calibrations||[])p.cal[x.lift]={weight:x.weight,reps:x.reps,rir:x.rir,e1rm:x.e1rm,tm:x.training_max,targetGuess:x.target_guess||'',ramp:x.ramp_sets||[]};
     p.logs=(cloud.logs||[]).map(l=>({id:l.id,week:l.week,workout:l.workout,startedAt:l.started_at,endedAt:l.ended_at,durationMinutes:l.duration_minutes,completionReason:l.completion_reason,items:l.items||[]}));
-    if(cloud.membership?.training_groups){const g=cloud.membership.training_groups;p.group={id:g.id,name:g.name,code:g.join_code,role:cloud.membership.role||'member'}}
+    if(cloud.memberships?.length){const m=cloud.memberships[0],g=m.training_groups;if(g)p.group={id:g.id,name:g.name,code:g.join_code,role:m.role||'member'}}
     return {profile:p,week:+cp.current_week||0,workout:cp.current_workout||'A'};
   }
   return {configured,init,session,signUp,signIn,signOut,pullUserState,pushProfile,pushCalibrations,pushWorkout,pushWorkouts,pushAll,createGroup,joinGroup,leaveGroup,listMyGroups,listJoinableGroups,requestGroupJoin,listOwnedGroupRequests,respondGroupJoinRequest,toLocal};
