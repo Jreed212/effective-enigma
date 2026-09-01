@@ -23,9 +23,9 @@ details.fold{background:#15171b;border:1px solid #2b2f35;border-radius:12px;padd
 </style></head><body><div class="wrap">
 <header><div><div class="brand">Strength Cycle</div><div class="muted">12-week strength beta</div></div><select id="who" style="max-width:220px"></select></header>
 <div class="tabs">
-<button data-tab="home">Home</button><button data-tab="work">Workout</button><button data-tab="progress">Progress</button><button data-tab="dict">Dictionary</button><button data-tab="profile">Profile</button>
+<button data-tab="home">Home</button><button data-tab="work">Workout</button><button data-tab="progress">Progress</button><button data-tab="stats">Stats</button><button data-tab="dict">Dictionary</button><button data-tab="profile">Profile</button>
 </div>
-<section id="home"></section><section id="profile" class="hidden"></section><section id="cal" class="hidden"></section><section id="work" class="hidden"></section><section id="progress" class="hidden"></section><section id="dict" class="hidden"></section><section id="log" class="hidden"></section><section id="group" class="hidden"></section>
+<section id="home"></section><section id="profile" class="hidden"></section><section id="cal" class="hidden"></section><section id="work" class="hidden"></section><section id="progress" class="hidden"></section><section id="stats" class="hidden"></section><section id="dict" class="hidden"></section><section id="log" class="hidden"></section><section id="group" class="hidden"></section>
 <input id="importFile" class="hidden" type="file" accept="application/json">
 <div id="techModal" class="modal hidden"><div class="modal-card"><div class="modal-head"><div><div id="techTitle" class="big"></div><div id="techMeta" class="muted small"></div></div><button id="closeTech" class="xbtn">×</button></div><div id="techBody"></div></div></div>
 </div>
@@ -65,6 +65,7 @@ if(!S){for(const k of OLD){try{const o=JSON.parse(localStorage.getItem(k)||'null
 if(!S)S={profiles:[baseProfile('p1','Lifter 1'),baseProfile('p2','Lifter 2')],profileId:'p1',tab:'profile',week:1,workout:'A'};
 let cloudSession=null,cloudBusy=false,cloudMessage='';
 let groupHub={mine:[],available:[],requests:[],loaded:false,error:'',status:'',updatedAt:null};
+let groupStatsState={groupId:'',rows:[],loading:false,error:''};
 let cloudTimer=null;
 async function cloudRefresh(){
   if(!window.StrengthCloud?.configured())return;
@@ -169,6 +170,75 @@ function plan(week,w){
 }
 function lastAccessory(name){for(const l of [...p().logs].reverse()){const it=(l.items||[]).find(x=>x.name===name);if(!it)continue;const sets=it.sets||[];const last=sets.filter(s=>s.touched||s.done).pop();if(!last)continue;let wt=+last.weight||0;let promote=sets.length&&sets.every(s=>(+s.reps||0)>=12)&&rirNum(it.rir)>=2;if(promote)wt+=5;return{weight:wt,note:promote?'Earned +5 lb':'Carry forward'}}return{weight:'',note:'Choose a comfortable starting weight'}}
 function bestPrior(name,before){let b=0;for(const l of p().logs){if(before&&new Date(l.endedAt)>=new Date(before))continue;const it=(l.items||[]).find(x=>x.name===name);for(const s of (it?.sets||[])){const w=+s.weight,r=+s.reps;if(w&&r&&r<=12)b=Math.max(b,e1rm(w,r))}}return b}
+function liftTimeline(name){
+ const out=[];
+ const cal=p().cal?.[name];
+ if(cal?.e1rm)out.push({date:cal.completedAt||p().start||'',value:+cal.e1rm,source:'Week 0'});
+ for(const l of p().logs||[]){
+   const it=(l.items||[]).find(x=>x.name===name);if(!it)continue;
+   let best=0;
+   for(const s of it.sets||[]){const w=+s.weight,r=+s.reps;if(w&&r&&r<=12)best=Math.max(best,e1rm(w,r))}
+   if(best)out.push({date:l.endedAt||l.startedAt,value:best,source:'Workout'});
+ }
+ return out.sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
+}
+function personalLiftStat(name){
+ const t=liftTimeline(name),start=t.length?t[0].value:0;
+ let current=0,currentDate='';
+ for(const x of t){if(x.value>=current){current=x.value;currentDate=x.date}}
+ const gain=start&&current?current-start:0,pct=start?gain/start*100:0;
+ return{name,start,current,gain,pct,currentDate,timeline:t};
+}
+function bodySnapshot(){
+ const cs=(p().checkins||[]).filter(x=>x.weight||x.waist).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+ const first=cs[0]||{},last=cs[cs.length-1]||{};
+ const sw=+(first.weight||p().weight||0),cw=+(last.weight||p().weight||0);
+ const sz=+(first.waist||p().waist||0),cz=+(last.waist||p().waist||0);
+ return{startWeight:sw,currentWeight:cw,weightChange:cw&&sw?cw-sw:0,weightPct:sw&&cw?(cw-sw)/sw*100:0,startWaist:sz,currentWaist:cz,waistChange:cz&&sz?cz-sz:0,checkins:cs.length};
+}
+function signed(n,digits=0){if(!Number.isFinite(+n))return'—';const v=+n;return(v>0?'+':'')+v.toFixed(digits)}
+function pctGain(start,current){return start&&current?((current-start)/start*100):0}
+async function loadGroupStats(groupId){
+ if(!cloudSession||!groupId)return;
+ groupStatsState={groupId,rows:groupStatsState.rows||[],loading:true,error:''};renderStats();
+ try{const rows=await window.StrengthCloud.groupStats(groupId);groupStatsState={groupId,rows,loading:false,error:''}}
+ catch(e){console.error(e);groupStatsState={groupId,rows:[],loading:false,error:(e.message||'Could not load group stats')+(e.code?' · '+e.code:'')}}
+ renderStats();
+}
+function groupStatsHtml(){
+ if(!cloudSession)return '<div class="card"><h2>Group Stats</h2><p class="muted">Sign in to compare stats with your training groups.</p></div>';
+ const groups=groupHub.mine||[];
+ if(!groups.length)return '<div class="card"><h2>Group Stats</h2><p class="muted">Join or create a training group first.</p></div>';
+ const gid=groupStatsState.groupId||groups[0].group_id;
+ const opts=groups.map(g=>'<option value="'+g.group_id+'" '+(g.group_id===gid?'selected':'')+'>'+g.group_name+'</option>').join('');
+ let body='';
+ if(groupStatsState.loading)body='<p class="muted">Loading scoreboard…</p>';
+ else if(groupStatsState.error)body='<p class="bad">'+groupStatsState.error+'</p>';
+ else if(!groupStatsState.rows.length)body='<p class="muted">No scoreboard data loaded yet.</p>';
+ else body=groupStatsState.rows.map(r=>{
+   const lifts=[
+    ['Squat',r.back_squat_start,r.back_squat_current],
+    ['Bench',r.bench_press_start,r.bench_press_current],
+    ['Trap Bar',r.trap_bar_deadlift_start,r.trap_bar_deadlift_current],
+    ['OHP',r.overhead_press_start,r.overhead_press_current]
+   ];
+   return '<div class="card"><div class="row" style="justify-content:space-between"><div><div class="big">'+r.member_name+'</div><div class="small muted">'+r.workouts_completed+' workouts</div></div>'+(r.weight_change!=null?'<span class="pill">'+signed(r.weight_change,1)+' lb body</span>':'')+'</div>'+
+    '<div class="grid2" style="margin-top:10px">'+lifts.map(x=>'<div class="history"><b>'+x[0]+'</b><div>'+((x[2]!=null)?Math.round(x[2])+' lb e1RM':'—')+'</div><div class="small '+(pctGain(+x[1],+x[2])>0?'good':'muted')+'">'+(x[1]&&x[2]?signed(x[2]-x[1],0)+' lb · '+signed(pctGain(+x[1],+x[2]),1)+'%':'No change yet')+'</div></div>').join('')+'</div>'+
+    (r.waist_change!=null?'<div class="small muted">Waist change: '+signed(r.waist_change,1)+' in</div>':'')+'</div>';
+ }).join('');
+ return '<div class="card"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">Group Stats</h2><div class="small muted">Friendly scoreboard · estimated maxes and progress only</div></div><button class="btn" id="refreshGroupStats">Refresh</button></div><label style="display:block;margin-top:10px">Group<select id="statsGroup">'+opts+'</select></label></div>'+body;
+}
+function renderStats(){
+ const lifts=mainLifts.map(personalLiftStat),b=bodySnapshot(),logs=p().logs||[];
+ let h='<div class="card"><h2>My Stats</h2><p class="muted">Your scoreboard from Week 0 through today. Estimated maxes use the same e1RM formula as the program.</p><div class="grid2"><div class="history"><b>Workouts</b><div class="big">'+logs.length+'</div></div><div class="history"><b>Check-ins</b><div class="big">'+b.checkins+'</div></div></div></div>';
+ h+='<div class="card"><h3>Lift Scoreboard</h3>'+lifts.map(x=>'<div class="history"><div class="row" style="justify-content:space-between"><div><b>'+x.name+'</b><div class="small muted">'+(x.currentDate?new Date(x.currentDate).toLocaleDateString():'No dated lift yet')+'</div></div><div style="text-align:right"><div class="big">'+(x.current?Math.round(x.current)+' lb':'—')+'</div><div class="small '+(x.gain>0?'good':'muted')+'">'+(x.start?signed(x.gain,0)+' lb · '+signed(x.pct,1)+'%':'Not calibrated')+'</div></div></div><details class="fold"><summary>Estimated max history</summary>'+(x.timeline.length?x.timeline.slice().reverse().map(v=>'<div class="row" style="justify-content:space-between"><span>'+new Date(v.date).toLocaleDateString()+' · '+v.source+'</span><b>'+Math.round(v.value)+' lb</b></div>').join(''):'<p class="muted">No history yet.</p>')+'</details></div>').join('')+'</div>';
+ h+='<div class="card"><h3>Body Scoreboard</h3><div class="grid2"><div class="history"><b>Body Weight</b><div class="big">'+(b.currentWeight?b.currentWeight+' lb':'—')+'</div><div class="small muted">'+(b.startWeight?'Start '+b.startWeight+' lb · '+signed(b.weightChange,1)+' lb · '+signed(b.weightPct,1)+'%':'Add a check-in to start tracking')+'</div></div><div class="history"><b>Waist</b><div class="big">'+(b.currentWaist?b.currentWaist+' in':'—')+'</div><div class="small muted">'+(b.startWaist?'Start '+b.startWaist+' in · '+signed(b.waistChange,1)+' in':'Add a check-in to start tracking')+'</div></div></div></div>';
+ h+=groupStatsHtml();
+ stats.innerHTML=h;
+ if(document.getElementById('statsGroup'))statsGroup.onchange=()=>loadGroupStats(statsGroup.value);
+ if(document.getElementById('refreshGroupStats'))refreshGroupStats.onclick=()=>loadGroupStats((document.getElementById('statsGroup')?.value)||groupStatsState.groupId||(groupHub.mine?.[0]?.group_id));
+ if(cloudSession&&groupHub.mine?.length&&!groupStatsState.groupId&&!groupStatsState.loading)setTimeout(()=>loadGroupStats(groupHub.mine[0].group_id),0);
+}
 function recovery(){
  const logs=p().logs||[];if(!logs.length)return{label:'READY TO START',cls:'good',txt:'No completed workout yet.',h:null};
  const last=logs[logs.length-1],h=(Date.now()-new Date(last.endedAt||last.savedAt||last.date))/36e5;
@@ -180,10 +250,10 @@ function recovery(){
 function nextSlot(){const logs=p().logs||[];if(!logs.length)return{week:1,w:'A'};const l=logs[logs.length-1],ord=['A','B','C'],i=ord.indexOf(l.workout);return i<2?{week:l.week,w:ord[i+1]}:{week:Math.min(12,(+l.week||1)+1),w:'A'}}
 function fmt(iso){return iso?new Date(iso).toLocaleString():'—'}
 function nav(){
- if(!['home','work','progress','dict','profile'].includes(S.tab))S.tab=S.tab==='cal'?'work':S.tab==='log'?'progress':S.tab==='group'?'profile':'home';
+ if(!['home','work','progress','stats','dict','profile'].includes(S.tab))S.tab=S.tab==='cal'?'work':S.tab==='log'?'progress':S.tab==='group'?'profile':'home';
  who.innerHTML=S.profiles.map(x=>'<option value="'+x.id+'" '+(x.id===S.profileId?'selected':'')+'>'+x.name+'</option>').join('');
  document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab===S.tab));
- ['home','profile','work','progress','dict'].forEach(id=>document.getElementById(id).classList.toggle('hidden',id!==S.tab));
+ ['home','profile','work','progress','stats','dict'].forEach(id=>document.getElementById(id).classList.toggle('hidden',id!==S.tab));
  ['cal','log','group'].forEach(id=>document.getElementById(id).classList.add('hidden'));
 }
 function renderHome(){
@@ -348,7 +418,7 @@ function renderGroup(){
  createG.onclick=()=>{const n=prompt('Group name?','Strength Crew');if(!n)return;p().group={name:n,code:code(),role:'owner'};save();render()};joinG.onclick=()=>{const c=(prompt('Group code?')||'').trim().toUpperCase();if(!c)return;const n=prompt('Group name?','Training Group')||'Training Group';p().group={name:n,code:c,role:'member'};save();render()};if(g)leaveG.onclick=()=>{if(confirm('Leave group?')){p().group=null;save();render()}};exportP.onclick=()=>download(slug(p().name)+'-strength-cycle.json',{type:'profile',profile:p()});exportA.onclick=()=>download('strength-cycle-backup.json',{type:'full',state:S});importP.onclick=()=>importFile.click()
 }
 importFile.onchange=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);if(o.type==='profile'&&o.profile){const q=o.profile;q.id='p'+Date.now();S.profiles.push(q);S.profileId=q.id}else if(o.type==='full'&&o.state){S=o.state}else throw 0;save();render()}catch{alert('Could not import that backup.')}};r.readAsText(f);e.target.value=''}
-function render(){autoExpire();nav();renderHome();renderProfile();renderWork();renderProgress();renderDict()}
+function render(){autoExpire();nav();renderHome();renderProfile();renderWork();renderProgress();renderStats();renderDict()}
 who.onchange=e=>{S.profileId=e.target.value;save();render()};document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;save();render()});
 closeTech.onclick=()=>techModal.classList.add('hidden');techModal.onclick=e=>{if(e.target===techModal)techModal.classList.add('hidden')};
 render();initCloudAuth();setInterval(autoExpire,60000);
