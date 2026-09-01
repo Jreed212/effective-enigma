@@ -54,7 +54,20 @@ window.StrengthCloud = (() => {
     const rows=(p.logs||[]).filter(l=>l.id&&l.startedAt&&l.endedAt).map(l=>({id:l.id,user_id:uid,week:+l.week,workout:l.workout,started_at:l.startedAt,ended_at:l.endedAt,duration_minutes:+l.durationMinutes||0,completion_reason:l.completionReason||'manual',items:l.items||[],updated_at:new Date().toISOString()}));
     if(!rows.length)return; const {error}=await client.from('workout_logs').upsert(rows); if(error) throw error;
   }
-  async function pushAll(p,week,workout){ await pushProfile(p,week,workout); await pushCalibrations(p); await pushWorkouts(p); }
+  async function pushCheckins(p){
+    const s=await session(); if(!s) throw new Error('Not signed in'); const uid=s.user.id;
+    const rows=(p.checkins||[]).filter(x=>x.date).map(x=>({user_id:uid,checkin_date:x.date,body_weight:x.weight?+x.weight:null,waist:x.waist?+x.waist:null,note:x.note||null}));
+    if(!rows.length)return;
+    const {error}=await client.from('checkins').upsert(rows,{onConflict:'user_id,checkin_date'});
+    if(error) throw error;
+  }
+  async function groupStats(groupId){
+    const s=await session(); if(!s) throw new Error('Not signed in');
+    const {data,error}=await client.rpc('group_stats',{p_group_id:groupId});
+    if(error) throw error;
+    return data||[];
+  }
+  async function pushAll(p,week,workout){ await pushProfile(p,week,workout); await pushCalibrations(p); await pushWorkouts(p); await pushCheckins(p); }
   async function createGroup(name,joinCode){
     const s=await session(); if(!s) throw new Error('Not signed in');
     const {data,error}=await client.rpc('create_training_group',{p_name:name,p_join_code:joinCode});
@@ -94,11 +107,13 @@ async function listMyGroups(){
   }
   
   function toLocal(cloud,base){
-    const cp=cloud.profile||{}, p=Object.assign({},base,{id:'cloud-'+cloud.user.id,accountId:cloud.user.id,name:cp.display_name||base.name||'Lifter',start:cp.program_start||'',weight:cp.body_weight??'',waist:cp.waist??'',height:cp.height||'',goal:cp.goal||'Strength',cal:{},logs:[]});
+    const cp=cloud.profile||{}, p=Object.assign({},base,{id:'cloud-'+cloud.user.id,accountId:cloud.user.id,name:cp.display_name||base.name||'Lifter',start:cp.program_start||'',weight:cp.body_weight??'',waist:cp.waist??'',height:cp.height||'',goal:cp.goal||'Strength',cal:{},logs:[],checkins:[],tmHistory:[]});
     for(const x of cloud.calibrations||[])p.cal[x.lift]={weight:x.weight,reps:x.reps,rir:x.rir,e1rm:x.e1rm,tm:x.training_max,targetGuess:x.target_guess||'',ramp:x.ramp_sets||[]};
     p.logs=(cloud.logs||[]).map(l=>({id:l.id,week:l.week,workout:l.workout,startedAt:l.started_at,endedAt:l.ended_at,durationMinutes:l.duration_minutes,completionReason:l.completion_reason,items:l.items||[]}));
+    p.checkins=(cloud.checkins||[]).map(x=>({date:x.checkin_date,weight:x.body_weight??'',waist:x.waist??'',note:x.note||''}));
+    p.tmHistory=(cloud.tmHistory||[]).map(x=>({date:x.created_at,afterWeek:x.after_week,changes:x.changes||[]}));
     if(cloud.memberships?.length){const m=cloud.memberships[0],g=m.training_groups;if(g)p.group={id:g.id,name:g.name,code:g.join_code,role:m.role||'member'}}
     return {profile:p,week:+cp.current_week||0,workout:cp.current_workout||'A'};
   }
-  return {configured,init,session,signUp,signIn,signOut,pullUserState,pushProfile,pushCalibrations,pushWorkout,pushWorkouts,pushAll,createGroup,joinGroup,leaveGroup,listMyGroups,listJoinableGroups,requestGroupJoin,listOwnedGroupRequests,respondGroupJoinRequest,toLocal};
+  return {configured,init,session,signUp,signIn,signOut,pullUserState,pushProfile,pushCalibrations,pushWorkout,pushWorkouts,pushAll,createGroup,joinGroup,leaveGroup,listMyGroups,listJoinableGroups,requestGroupJoin,listOwnedGroupRequests,respondGroupJoinRequest,pushCheckins,groupStats,toLocal};
 })();
