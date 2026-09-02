@@ -7,6 +7,9 @@ alter table public.profiles
 alter table public.calibrations
   add column if not exists cycle_number integer not null default 1;
 
+alter table public.calibrations drop constraint if exists calibrations_pkey;
+alter table public.calibrations add primary key (user_id, cycle_number, lift);
+
 alter table public.workout_logs
   add column if not exists cycle_number integer not null default 1;
 
