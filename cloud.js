@@ -118,11 +118,18 @@ async function listMyGroups(){
   }
   
   function toLocal(cloud,base){
-    const cp=cloud.profile||{}, p=Object.assign({},base,{id:'cloud-'+cloud.user.id,accountId:cloud.user.id,name:cp.display_name||base.name||'Lifter',start:cp.program_start||'',weight:cp.body_weight??'',waist:cp.waist??'',height:cp.height||'',goal:cp.goal||'Strength',activeCycle:+cp.active_cycle||1,cycles:cloud.cycles||[],cal:{},logs:[],checkins:[],tmHistory:[]});
-    for(const x of (cloud.calibrations||[]).filter(x=>(+x.cycle_number||1)===(+p.activeCycle||1)))p.cal[x.lift]={weight:x.weight,reps:x.reps,rir:x.rir,e1rm:x.e1rm,tm:x.training_max,targetGuess:x.target_guess||'',ramp:x.ramp_sets||[]};
-    p.logs=(cloud.logs||[]).filter(l=>(+l.cycle_number||1)===(+p.activeCycle||1)).map(l=>({id:l.id,week:l.week,workout:l.workout,startedAt:l.started_at,endedAt:l.ended_at,durationMinutes:l.duration_minutes,completionReason:l.completion_reason,items:l.items||[],cycleNumber:+l.cycle_number||1}));
+    const cp=cloud.profile||{}, p=Object.assign({},base,{id:'cloud-'+cloud.user.id,accountId:cloud.user.id,name:cp.display_name||base.name||'Lifter',start:cp.program_start||'',weight:cp.body_weight??'',waist:cp.waist??'',height:cp.height||'',goal:cp.goal||'Strength',activeCycle:+cp.active_cycle||1,cycles:[],cal:{},logs:[],checkins:[],tmHistory:[]});
+    const mapLog=l=>({id:l.id,week:l.week,workout:l.workout,startedAt:l.started_at,endedAt:l.ended_at,durationMinutes:l.duration_minutes,completionReason:l.completion_reason,items:l.items||[],cycleNumber:+l.cycle_number||1});
+    const mapCal=x=>({weight:x.weight,reps:x.reps,rir:x.rir,e1rm:x.e1rm,tm:x.training_max,targetGuess:x.target_guess||'',ramp:x.ramp_sets||[]});
+    for(const x of (cloud.calibrations||[]).filter(x=>(+x.cycle_number||1)===(+p.activeCycle||1)))p.cal[x.lift]=mapCal(x);
+    p.logs=(cloud.logs||[]).filter(l=>(+l.cycle_number||1)===(+p.activeCycle||1)).map(mapLog);
+    p.cycles=(cloud.cycles||[]).map(cy=>{
+      const n=+cy.cycle_number||1,cal={};
+      for(const x of (cloud.calibrations||[]).filter(x=>(+x.cycle_number||1)===n))cal[x.lift]=mapCal(x);
+      return{number:n,name:cy.name,startDate:cy.started_on||'',endDate:cy.ended_on||'',summary:cy.summary||{},cal,logs:(cloud.logs||[]).filter(l=>(+l.cycle_number||1)===n).map(mapLog),tmHistory:(cloud.tmHistory||[]).filter(x=>(+x.cycle_number||1)===n).map(x=>({date:x.created_at,afterWeek:x.after_week,changes:x.changes||[]}))};
+    });
     p.checkins=(cloud.checkins||[]).map(x=>({date:x.checkin_date,weight:x.body_weight??'',waist:x.waist??'',note:x.note||''}));
-    p.tmHistory=(cloud.tmHistory||[]).map(x=>({date:x.created_at,afterWeek:x.after_week,changes:x.changes||[]}));
+    p.tmHistory=(cloud.tmHistory||[]).filter(x=>(+x.cycle_number||1)===(+p.activeCycle||1)).map(x=>({date:x.created_at,afterWeek:x.after_week,changes:x.changes||[]}));
     if(cloud.memberships?.length){const m=cloud.memberships[0],g=m.training_groups;if(g)p.group={id:g.id,name:g.name,code:g.join_code,role:m.role||'member'}}
     return {profile:p,week:+cp.current_week||0,workout:cp.current_workout||'A'};
   }
