@@ -396,6 +396,21 @@ function saveWeek0Aux(){
  cloudMessage=cloudSession?'Auxiliary session saved — syncing…':'Auxiliary session saved locally.';
  render();
 }
+function week0AuxHistoryHtml(){
+ const logs=(p().logs||[]).filter(l=>+l.week===0&&l.workout==='Aux').slice().reverse();
+ if(!logs.length)return '<div class="card"><h3>Week 0 Auxiliary History</h3><p class="muted">No saved auxiliary sessions yet.</p></div>';
+ return '<div class="card"><h3>Week 0 Auxiliary History</h3>'+logs.map(l=>{
+   const rows=(l.items||[]).filter(it=>(it.sets||[]).some(s=>s.touched||s.done)).map(it=>{
+     const sets=(it.sets||[]).filter(s=>s.touched||s.done).map(s=>{
+       const w=s.weight?String(s.weight)+' lb':'';
+       const r=s.reps?String(s.reps)+(it.name==='Plank'?' sec':' reps'):'';
+       return [w,r].filter(Boolean).join(' × ');
+     }).join(' · ');
+     return '<div class="history"><div class="row" style="justify-content:space-between"><b>'+it.name+'</b><span class="small muted">RIR '+(it.rir||'—')+'</span></div><div class="small">'+sets+'</div></div>';
+   }).join('');
+   return '<details class="fold" open><summary>'+displayDateTime(l.endedAt||l.startedAt)+'</summary>'+rows+'</details>';
+ }).join('')+'</div>';
+}
 function week0AuxHtml(){
  return '<div class="card"><h2>Optional Auxiliary / Recovery Session</h2><p class="muted">Use this between calibration days when you want to move without taking anything away from the remaining big lifts. Pick only what fits your time and how you feel. <b>You do not need to do every exercise.</b></p><div class="history"><b>Rules for today</b><div class="small muted">2 sets each · keep about 3–4 RIR · no grinding · stop anything that makes you feel less fresh for the remaining calibration lifts.</div></div>'+
  week0AuxPlan().map((it,ix)=>'<div class="lift"><div class="row" style="justify-content:space-between"><div><b>'+it.name+'</b><div class="small muted">'+it.sets+' × '+it.reps+' · optional</div></div><button class="btn" data-tech="'+it.name+'">ⓘ Technique</button></div>'+Array.from({length:it.sets},(_,si)=>'<div class="set"><b>'+(si+1)+'</b><input data-aux-w="'+ix+'-'+si+'" inputmode="decimal" placeholder="'+(it.name==='Plank'?'—':'lb')+'"><input data-aux-r="'+ix+'-'+si+'" inputmode="numeric" placeholder="'+(it.name==='Plank'?'sec':'reps')+'"><span class="small muted">RIR</span><span></span></div>').join('')+'<label>Effort<select data-aux-rir="'+ix+'"><option value="">—</option><option>3</option><option selected>4+</option></select></label></div>').join('')+
@@ -414,6 +429,7 @@ function renderWeek0(){
   '<p class="small muted">We save every set. For the starting strength estimate, the app uses your strongest valid set in the 2–6 rep range, then applies the conservative Training Max reduction for the 12-week plan.</p></div>';
  });
  html+=week0AuxHtml();
+ html+=week0AuxHistoryHtml();
  work.innerHTML=html;
  wk.onchange=()=>{S.week=+wk.value;save();render()};
  const auxSaveBtn=document.getElementById('saveWeek0Aux');if(auxSaveBtn)auxSaveBtn.addEventListener('click',saveWeek0Aux);
