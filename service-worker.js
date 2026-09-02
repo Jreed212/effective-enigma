@@ -1,4 +1,4 @@
-const CACHE='strength-cycle-v30';
+const CACHE='strength-cycle-v31';
 const ASSETS=['./manifest.webmanifest'];
 self.addEventListener('install',e=>{
   self.skipWaiting();
