@@ -416,7 +416,7 @@ function renderWeek0(){
  html+=week0AuxHtml();
  work.innerHTML=html;
  wk.onchange=()=>{S.week=+wk.value;save();render()};
- if(document.getElementById('saveWeek0Aux'))saveWeek0Aux.onclick=saveWeek0Aux;
+ const auxSaveBtn=document.getElementById('saveWeek0Aux');if(auxSaveBtn)auxSaveBtn.addEventListener('click',saveWeek0Aux);
  document.querySelectorAll('[data-tech]').forEach(b=>b.onclick=()=>openTech(b.dataset.tech));
  document.querySelectorAll('[data-rw],[data-rr],[data-rir],[data-rd]').forEach(el=>{
    const handler=()=>{
