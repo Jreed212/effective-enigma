@@ -22,26 +22,27 @@ window.StrengthCloud = (() => {
 
   async function pullUserState(){
     const s=await session(); if(!s) return null; const uid=s.user.id;
-    const [profile,cal,checkins,logs,tm,member]=await Promise.all([
+    const [profile,cal,checkins,logs,tm,cycles,member]=await Promise.all([
       client.from('profiles').select('*').eq('id',uid).maybeSingle(),
       client.from('calibrations').select('*').eq('user_id',uid),
       client.from('checkins').select('*').eq('user_id',uid).order('checkin_date'),
       client.from('workout_logs').select('*').eq('user_id',uid).order('started_at'),
       client.from('tm_history').select('*').eq('user_id',uid).order('created_at'),
+      client.from('program_cycles').select('*').eq('user_id',uid).order('cycle_number'),
       client.from('group_members').select('group_id,role,training_groups(id,name,join_code,owner_id)').eq('user_id',uid)
     ]);
     if(profile.error) throw profile.error;
-    return {user:s.user,profile:profile.data,calibrations:cal.data||[],checkins:checkins.data||[],logs:logs.data||[],tmHistory:tm.data||[],memberships:member.data||[]};
+    return {user:s.user,profile:profile.data,calibrations:cal.data||[],checkins:checkins.data||[],logs:logs.data||[],tmHistory:tm.data||[],cycles:cycles.data||[],memberships:member.data||[]};
   }
 
   async function pushProfile(p,week=0,workout='A'){
     const s=await session(); if(!s) throw new Error('Not signed in'); const uid=s.user.id;
-    const row={id:uid,display_name:p.name||'Lifter',program_start:p.start||null,body_weight:p.weight||null,waist:p.waist||null,height:p.height||null,goal:p.goal||'Strength',current_week:+week||0,current_workout:workout||'A',updated_at:new Date().toISOString()};
+    const row={id:uid,display_name:p.name||'Lifter',program_start:p.start||null,body_weight:p.weight||null,waist:p.waist||null,height:p.height||null,goal:p.goal||'Strength',current_week:+week||0,current_workout:workout||'A',active_cycle:+(p.activeCycle||1),updated_at:new Date().toISOString()};
     const {error}=await client.from('profiles').upsert(row); if(error) throw error;
   }
   async function pushCalibrations(p){
     const s=await session(); if(!s) throw new Error('Not signed in'); const uid=s.user.id;
-    const rows=Object.entries(p.cal||{}).map(([lift,c])=>({user_id:uid,lift,weight:+c.weight,reps:+c.reps,rir:String(c.rir??''),e1rm:+c.e1rm,training_max:+c.tm,target_guess:c.targetGuess?+c.targetGuess:null,ramp_sets:c.ramp||[],updated_at:new Date().toISOString()}));
+    const rows=Object.entries(p.cal||{}).map(([lift,c])=>({user_id:uid,lift,weight:+c.weight,reps:+c.reps,rir:String(c.rir??''),e1rm:+c.e1rm,training_max:+c.tm,target_guess:c.targetGuess?+c.targetGuess:null,ramp_sets:c.ramp||[],cycle_number:+(p.activeCycle||1),updated_at:new Date().toISOString()}));
     if(!rows.length) return; const {error}=await client.from('calibrations').upsert(rows); if(error) throw error;
   }
   async function pushWorkout(log){
@@ -51,7 +52,7 @@ window.StrengthCloud = (() => {
   }
   async function pushWorkouts(p){
     const s=await session(); if(!s) throw new Error('Not signed in'); const uid=s.user.id;
-    const rows=(p.logs||[]).filter(l=>l.id&&l.startedAt&&l.endedAt).map(l=>({id:l.id,user_id:uid,week:+l.week,workout:l.workout,started_at:l.startedAt,ended_at:l.endedAt,duration_minutes:+l.durationMinutes||0,completion_reason:l.completionReason||'manual',items:l.items||[],updated_at:new Date().toISOString()}));
+    const rows=(p.logs||[]).filter(l=>l.id&&l.startedAt&&l.endedAt).map(l=>({id:l.id,user_id:uid,week:+l.week,workout:l.workout,started_at:l.startedAt,ended_at:l.endedAt,duration_minutes:+l.durationMinutes||0,completion_reason:l.completionReason||'manual',items:l.items||[],cycle_number:+(l.cycleNumber||p.activeCycle||1),updated_at:new Date().toISOString()}));
     if(!rows.length)return; const {error}=await client.from('workout_logs').upsert(rows); if(error) throw error;
   }
   async function pushCheckins(p){
@@ -61,7 +62,17 @@ window.StrengthCloud = (() => {
     const {error}=await client.from('checkins').upsert(rows,{onConflict:'user_id,checkin_date'});
     if(error) throw error;
   }
-  async function groupStats(groupId){
+  async function archiveAndStartNextCycle(p,name,summary){
+    const s=await session(); if(!s) throw new Error('Not signed in');
+    const start=p.start||null;
+    const end=new Date().toISOString().slice(0,10);
+    const {data,error}=await client.rpc('archive_and_start_next_cycle',{
+      p_name:name,p_started_on:start,p_ended_on:end,p_summary:summary||{}
+    });
+    if(error) throw error;
+    return +data;
+  }
+async function groupStats(groupId){
     const s=await session(); if(!s) throw new Error('Not signed in');
     const {data,error}=await client.rpc('group_stats',{p_group_id:groupId});
     if(error) throw error;
@@ -107,13 +118,13 @@ async function listMyGroups(){
   }
   
   function toLocal(cloud,base){
-    const cp=cloud.profile||{}, p=Object.assign({},base,{id:'cloud-'+cloud.user.id,accountId:cloud.user.id,name:cp.display_name||base.name||'Lifter',start:cp.program_start||'',weight:cp.body_weight??'',waist:cp.waist??'',height:cp.height||'',goal:cp.goal||'Strength',cal:{},logs:[],checkins:[],tmHistory:[]});
-    for(const x of cloud.calibrations||[])p.cal[x.lift]={weight:x.weight,reps:x.reps,rir:x.rir,e1rm:x.e1rm,tm:x.training_max,targetGuess:x.target_guess||'',ramp:x.ramp_sets||[]};
-    p.logs=(cloud.logs||[]).map(l=>({id:l.id,week:l.week,workout:l.workout,startedAt:l.started_at,endedAt:l.ended_at,durationMinutes:l.duration_minutes,completionReason:l.completion_reason,items:l.items||[]}));
+    const cp=cloud.profile||{}, p=Object.assign({},base,{id:'cloud-'+cloud.user.id,accountId:cloud.user.id,name:cp.display_name||base.name||'Lifter',start:cp.program_start||'',weight:cp.body_weight??'',waist:cp.waist??'',height:cp.height||'',goal:cp.goal||'Strength',activeCycle:+cp.active_cycle||1,cycles:cloud.cycles||[],cal:{},logs:[],checkins:[],tmHistory:[]});
+    for(const x of (cloud.calibrations||[]).filter(x=>(+x.cycle_number||1)===(+p.activeCycle||1)))p.cal[x.lift]={weight:x.weight,reps:x.reps,rir:x.rir,e1rm:x.e1rm,tm:x.training_max,targetGuess:x.target_guess||'',ramp:x.ramp_sets||[]};
+    p.logs=(cloud.logs||[]).filter(l=>(+l.cycle_number||1)===(+p.activeCycle||1)).map(l=>({id:l.id,week:l.week,workout:l.workout,startedAt:l.started_at,endedAt:l.ended_at,durationMinutes:l.duration_minutes,completionReason:l.completion_reason,items:l.items||[],cycleNumber:+l.cycle_number||1}));
     p.checkins=(cloud.checkins||[]).map(x=>({date:x.checkin_date,weight:x.body_weight??'',waist:x.waist??'',note:x.note||''}));
     p.tmHistory=(cloud.tmHistory||[]).map(x=>({date:x.created_at,afterWeek:x.after_week,changes:x.changes||[]}));
     if(cloud.memberships?.length){const m=cloud.memberships[0],g=m.training_groups;if(g)p.group={id:g.id,name:g.name,code:g.join_code,role:m.role||'member'}}
     return {profile:p,week:+cp.current_week||0,workout:cp.current_workout||'A'};
   }
-  return {configured,init,session,signUp,signIn,signOut,pullUserState,pushProfile,pushCalibrations,pushWorkout,pushWorkouts,pushAll,createGroup,joinGroup,leaveGroup,listMyGroups,listJoinableGroups,requestGroupJoin,listOwnedGroupRequests,respondGroupJoinRequest,pushCheckins,groupStats,toLocal};
+  return {configured,init,session,signUp,signIn,signOut,pullUserState,pushProfile,pushCalibrations,pushWorkout,pushWorkouts,pushAll,createGroup,joinGroup,leaveGroup,listMyGroups,listJoinableGroups,requestGroupJoin,listOwnedGroupRequests,respondGroupJoinRequest,pushCheckins,groupStats,archiveAndStartNextCycle,toLocal};
 })();
