@@ -59,11 +59,11 @@ const ex={
 'Plank':{cat:'Core',eq:'Floor / mat',c:['Elbows under shoulders','Brace glutes and abs','Keep a straight line head to heels','Breathe without losing brace'],m:['Hips sagging','Hips too high','Holding breath'],mus:'Core · Glutes · Shoulders',sub:'Cable Crunch · Pallof Press'},
 'Cable Crunch':{cat:'Core',eq:'Cable + rope',c:['Kneel with rope by head','Brace before moving','Curl ribs toward pelvis','Control the return'],m:['Pulling with arms','Sitting hips back','Using momentum'],mus:'Abdominals',sub:'Plank · Pallof Press'}
 };
-function baseProfile(id,name){return{id,name,accountId:'acct-'+Math.random().toString(36).slice(2)+Date.now().toString(36),start:'',weight:'',waist:'',height:'',goal:'Strength',checkins:[],cal:{},logs:[],tmHistory:[],cycles:[],cycleNumber:1,applied:{},group:null,active:null,revision:1,updatedAt:new Date().toISOString()}}
+function baseProfile(id,name){return{id,name,accountId:'acct-'+Math.random().toString(36).slice(2)+Date.now().toString(36),start:'',weight:'',waist:'',height:'',goal:'Strength',checkins:[],cal:{},logs:[],tmHistory:[],cycles:[],activeCycle:1,applied:{},group:null,active:null,revision:1,updatedAt:new Date().toISOString()}}
 let S=null;try{S=JSON.parse(localStorage.getItem(KEY)||'null')}catch{}
 if(!S){for(const k of OLD){try{const o=JSON.parse(localStorage.getItem(k)||'null');if(o&&o.profiles){S={profiles:o.profiles.map((x,i)=>Object.assign(baseProfile(x.id||'p'+i,x.name||'Lifter '+(i+1)),{start:x.start||x.startDate||'',weight:x.weight||x.bodyWeight||'',waist:x.waist||'',height:x.height||'',goal:x.goal||'Strength',checkins:x.checkins||[],cal:x.cal||{},logs:x.logs||x.workoutLogs||[],tmHistory:x.tmHistory||[],applied:x.appliedBlocks||{},group:x.group||null,active:x.activeSession||null})),profileId:o.profileId||o.profiles[0].id,tab:'profile',week:o.week||1,workout:o.workout||'A'};break}}catch{}}}
 if(!S)S={profiles:[baseProfile('p1','Lifter 1'),baseProfile('p2','Lifter 2')],profileId:'p1',tab:'profile',week:1,workout:'A'};
-S.profiles.forEach(x=>{if(!Array.isArray(x.cycles))x.cycles=[];if(!x.cycleNumber)x.cycleNumber=(x.cycles.length||0)+1;if(!Array.isArray(x.checkins))x.checkins=[]});
+S.profiles.forEach(x=>{if(!Array.isArray(x.cycles))x.cycles=[];if(!x.activeCycle)x.activeCycle=(x.cycles.reduce((m,cy)=>Math.max(m,+(cy.number||cy.cycle_number)||0),0)||0)+1;if(!Array.isArray(x.checkins))x.checkins=[]});
 let cloudSession=null,cloudBusy=false,cloudMessage='';
 let groupHub={mine:[],available:[],requests:[],loaded:false,error:'',status:'',updatedAt:null};
 let groupStatsState={groupId:'',rows:[],loading:false,error:''};
@@ -188,8 +188,8 @@ function liftTimeline(name){
      if(best)out.push({date:l.endedAt||l.startedAt,value:best,source:label+' Workout'});
    }
  };
- (p().cycles||[]).forEach(cy=>addCycle(cy,'Cycle '+cy.number));
- addCycle({cal:p().cal||{},logs:p().logs||[],startDate:p().start},'Cycle '+(p().cycleNumber||1));
+ (p().cycles||[]).forEach(cy=>addCycle({cal:cy.cal||{},logs:cy.logs||[],startDate:cy.startDate||cy.started_on||''},'Cycle '+(cy.number||cy.cycle_number)));
+ addCycle({cal:p().cal||{},logs:p().logs||[],startDate:p().start},'Cycle '+(p().activeCycle||1));
  return out.sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
 }
 function personalLiftStat(name){
@@ -273,7 +273,7 @@ function renderStats(){
  let h='<div class="card"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">My Stats</h2><div class="small muted">Active Cycle '+(p().activeCycle||1)+'</div></div><button class="btn" id="archiveCycle">Finish Cycle & Start Next</button></div><p class="muted">Your scoreboard from Week 0 through today. Estimated maxes use the same e1RM formula as the program.</p><div class="grid2"><div class="history"><b>Workouts</b><div class="big">'+logs.length+'</div></div><div class="history"><b>Check-ins</b><div class="big">'+b.checkins+'</div></div></div></div>';
  h+='<div class="card"><h3>Lift Scoreboard</h3>'+lifts.map(x=>'<div class="history"><div class="row" style="justify-content:space-between"><div><b>'+x.name+'</b><div class="small muted">'+(x.currentDate?displayDate(x.currentDate):'No dated lift yet')+'</div></div><div style="text-align:right"><div class="big">'+(x.current?Math.round(x.current)+' lb':'—')+'</div><div class="small '+(x.gain>0?'good':'muted')+'">'+(x.start?signed(x.gain,0)+' lb · '+signed(x.pct,1)+'%':'Not calibrated')+'</div></div></div><details class="fold"><summary>Estimated max history</summary>'+(x.timeline.length?x.timeline.slice().reverse().map(v=>'<div class="row" style="justify-content:space-between"><span>'+displayDate(v.date)+' · '+v.source+'</span><b>'+Math.round(v.value)+' lb</b></div>').join(''):'<p class="muted">No history yet.</p>')+'</details></div>').join('')+'</div>';
  h+='<div class="card"><h3>Body Scoreboard</h3><div class="grid2"><div class="history"><b>Body Weight</b><div class="big">'+(b.currentWeight?b.currentWeight+' lb':'—')+'</div><div class="small muted">'+(b.startWeight?'Start '+b.startWeight+' lb · '+signed(b.weightChange,1)+' lb · '+signed(b.weightPct,1)+'%':'Add a check-in to start tracking')+'</div></div><div class="history"><b>Waist</b><div class="big">'+(b.currentWaist?b.currentWaist+' in':'—')+'</div><div class="small muted">'+(b.startWaist?'Start '+b.startWaist+' in · '+signed(b.waistChange,1)+' in':'Add a check-in to start tracking')+'</div></div></div></div>';
- h+='<div class="card"><h3>Cycle History</h3>'+(archived.length?archived.slice().reverse().map(cy=>'<details class="fold"><summary>Cycle '+cy.number+' · '+displayDate(cy.startDate)+' → '+displayDate(cy.endDate)+'</summary><div class="small muted">'+(cy.logs?.length||0)+' workouts archived</div>'+mainLifts.map(l=>{const s=cy.summary?.lifts?.[l];return s?'<div class="row" style="justify-content:space-between"><span>'+l+'</span><b>'+Math.round(s.best||0)+' lb e1RM</b></div>':''}).join('')+'</details>').join(''):'<p class="muted">No completed cycles yet.</p>')+'</div>';
+ h+='<div class="card"><h3>Cycle History</h3>'+(archived.length?archived.slice().reverse().map(cy=>'<details class="fold"><summary>Cycle '+cy.number+' · '+displayDate(cy.startDate)+' → '+displayDate(cy.endDate)+'</summary><div class="small muted">'+((cy.logs?.length)||cy.summary?.workouts||0)+' workouts archived</div>'+mainLifts.map(l=>{const s=cy.summary?.lifts?.[l];return s?'<div class="row" style="justify-content:space-between"><span>'+l+'</span><b>'+Math.round(s.best||0)+' lb e1RM</b></div>':''}).join('')+'</details>').join(''):'<p class="muted">No completed cycles yet.</p>')+'</div>';
  h+='<div class="card"><h3>Completed Cycles</h3>'+archivedCyclesHtml()+'</div>';h+=groupStatsHtml();
  stats.innerHTML=h;
  if(document.getElementById('archiveCycle'))archiveCycle.onclick=archiveCurrentCycle;
@@ -334,7 +334,7 @@ function finish(reason='manual'){
  const a=p().active;if(!a)return;const end=reason==='timeout'?new Date(new Date(a.lastActivityAt).getTime()+15*60000).toISOString():new Date().toISOString();
  const pl=plan(a.week,a.workout),items=pl.map((it,ix)=>{const d=a.items[ix]||{sets:{},rir:''},sets=[];for(let si=0;si<it.sets;si++){const s=d.sets?.[si]||{};sets.push({weight:s.weight||'',reps:s.reps||'',done:!!s.done,touched:!!s.touched})}let best=0;for(const s of sets){if(+s.weight&&+s.reps&&+s.reps<=12)best=Math.max(best,e1rm(+s.weight,+s.reps))}return{name:it.name,type:it.type,setsTarget:it.sets,repsTarget:it.reps,pct:it.pct,sets,rir:d.rir||'',bestE1rm:best,pr:best>bestPrior(it.name,end)+.5}});
  const touched=items.reduce((n,it)=>n+it.sets.filter(s=>s.touched||s.done).length,0);if(!touched&&reason==='timeout'){p().active=null;save();return}
- p().logs.push({id:a.id,week:a.week,workout:a.workout,startedAt:a.startedAt,endedAt:end,durationMinutes:Math.max(0,Math.round((new Date(end)-new Date(a.startedAt))/60000)),completionReason:reason,cycleNumber:+(p().activeCycle||1),items});p().active=null;save();S.tab='log';render()
+ p().logs.push({id:a.id,cycleNumber:p().activeCycle||1,week:a.week,workout:a.workout,startedAt:a.startedAt,endedAt:end,durationMinutes:Math.max(0,Math.round((new Date(end)-new Date(a.startedAt))/60000)),completionReason:reason,cycleNumber:+(p().activeCycle||1),items});p().active=null;save();S.tab='log';render()
 }
 function autoExpire(){const a=p().active;if(a&&(Date.now()-new Date(a.lastActivityAt))/60000>=15)finish('timeout')}
 function calibrationSets(existing){
@@ -456,11 +456,14 @@ function currentCycleSummary(){
 function cycleReady(){const w12=new Set((p().logs||[]).filter(l=>+l.week===12).map(l=>l.workout));return ['A','B','C'].every(x=>w12.has(x))}
 async function archiveCurrentCycle(){
  if(!cycleReady())return alert('Finish Week 12 workouts A, B, and C before archiving this cycle.');
- if(!confirm('Archive Cycle '+(p().cycleNumber||1)+' and start a fresh Week 0? Your old cycle will stay in Cycle History.'))return;
- const cy={number:p().cycleNumber||1,startDate:p().start||'',endDate:localDateKey(),cal:JSON.parse(JSON.stringify(p().cal||{})),logs:JSON.parse(JSON.stringify(p().logs||[])),tmHistory:JSON.parse(JSON.stringify(p().tmHistory||[])),applied:JSON.parse(JSON.stringify(p().applied||{})),summary:currentCycleSummary()};
+ const n=p().activeCycle||1;
+ if(!confirm('Archive Cycle '+n+' and start a fresh Week 0? Your old cycle will stay in Cycle History.'))return;
+ const summary=currentCycleSummary();
+ const cy={number:n,startDate:p().start||'',endDate:localDateKey(),cal:JSON.parse(JSON.stringify(p().cal||{})),logs:JSON.parse(JSON.stringify(p().logs||[])),tmHistory:JSON.parse(JSON.stringify(p().tmHistory||[])),applied:JSON.parse(JSON.stringify(p().applied||{})),summary};
  try{
-   if(cloudSession&&window.StrengthCloud?.archiveCycle)await window.StrengthCloud.archiveCycle(cy);
-   p().cycles=p().cycles||[];p().cycles.push(cy);p().cycleNumber=cy.number+1;p().start='';p().cal={};p().logs=[];p().tmHistory=[];p().applied={};p().active=null;S.week=0;S.workout='A';S.tab='work';save();render();
+   let next=n+1;
+   if(cloudSession&&window.StrengthCloud?.archiveAndStartNextCycle)next=await window.StrengthCloud.archiveAndStartNextCycle(p(),'Cycle '+n,summary);
+   p().cycles=p().cycles||[];p().cycles.push(cy);p().activeCycle=next;p().start='';p().cal={};p().logs=[];p().tmHistory=[];p().applied={};p().active=null;S.week=0;S.workout='A';S.tab='work';localStorage.setItem(KEY,JSON.stringify(S));render();
  }catch(e){console.error(e);alert((e.message||'Could not archive cycle')+(e.code?' · '+e.code:''))}
 }
 function renderProgress(){
