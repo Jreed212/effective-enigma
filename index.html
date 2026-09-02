@@ -67,20 +67,34 @@ S.profiles.forEach(x=>{if(!Array.isArray(x.cycles))x.cycles=[];if(!x.activeCycle
 let cloudSession=null,cloudBusy=false,cloudMessage='';
 let groupHub={mine:[],available:[],requests:[],loaded:false,error:'',status:'',updatedAt:null};
 let groupStatsState={groupId:'',rows:[],loading:false,error:''};
-let cloudTimer=null;
+let cloudTimer=null,cloudSyncPending=false;
 async function cloudRefresh(){
   if(!window.StrengthCloud?.configured())return;
   window.StrengthCloud.init();
   cloudSession=await window.StrengthCloud.session();
 }
 function scheduleCloudSync(){
-  if(!cloudSession||cloudBusy)return;
+  if(!cloudSession)return;
+  cloudSyncPending=true;
   clearTimeout(cloudTimer);
-  cloudTimer=setTimeout(async()=>{
-    try{cloudBusy=true;await window.StrengthCloud.pushAll(p(),S.week,S.workout);cloudMessage='Synced';}
-    catch(e){console.error(e);cloudMessage='Sync error';}
-    finally{cloudBusy=false}
-  },700);
+  cloudTimer=setTimeout(runCloudSync,500);
+}
+async function runCloudSync(){
+  if(!cloudSession||cloudBusy)return;
+  if(!cloudSyncPending)return;
+  cloudSyncPending=false;
+  try{
+    cloudBusy=true;
+    await window.StrengthCloud.pushAll(p(),S.week,S.workout);
+    cloudMessage='Synced';
+  }catch(e){
+    console.error(e);
+    cloudMessage='Sync error';
+    cloudSyncPending=true;
+  }finally{
+    cloudBusy=false;
+    if(cloudSyncPending)setTimeout(runCloudSync,350);
+  }
 }
 async function cloudLogin(email,password,mode){
   try{
@@ -375,12 +389,17 @@ function saveWeek0Aux(){
   return{name:it.name,type:'week0-aux',setsTarget:it.sets,repsTarget:it.reps,pct:0,sets,rir:document.querySelector('[data-aux-rir="'+ix+'"]')?.value||'',bestE1rm:0,pr:false};
  });
  const touched=items.some(it=>it.sets.some(s=>s.touched));if(!touched)return alert('Enter at least one set before saving.');
- p().logs.push({id:'w0aux'+Date.now(),cycleNumber:p().activeCycle||1,week:0,workout:'Aux',startedAt:new Date().toISOString(),endedAt:new Date().toISOString(),durationMinutes:0,completionReason:'manual',items});save();alert('Week 0 auxiliary session saved.');render();
+ const now=new Date().toISOString();
+ p().logs.push({id:'w0aux'+Date.now(),cycleNumber:p().activeCycle||1,week:0,workout:'Aux',startedAt:now,endedAt:now,durationMinutes:0,completionReason:'manual',items});
+ p().week0AuxLastSavedAt=now;
+ save();
+ cloudMessage=cloudSession?'Auxiliary session saved — syncing…':'Auxiliary session saved locally.';
+ render();
 }
 function week0AuxHtml(){
  return '<div class="card"><h2>Optional Auxiliary / Recovery Session</h2><p class="muted">Use this between calibration days when you want to move without taking anything away from the remaining big lifts. Pick only what fits your time and how you feel. <b>You do not need to do every exercise.</b></p><div class="history"><b>Rules for today</b><div class="small muted">2 sets each · keep about 3–4 RIR · no grinding · stop anything that makes you feel less fresh for the remaining calibration lifts.</div></div>'+
  week0AuxPlan().map((it,ix)=>'<div class="lift"><div class="row" style="justify-content:space-between"><div><b>'+it.name+'</b><div class="small muted">'+it.sets+' × '+it.reps+' · optional</div></div><button class="btn" data-tech="'+it.name+'">ⓘ Technique</button></div>'+Array.from({length:it.sets},(_,si)=>'<div class="set"><b>'+(si+1)+'</b><input data-aux-w="'+ix+'-'+si+'" inputmode="decimal" placeholder="'+(it.name==='Plank'?'—':'lb')+'"><input data-aux-r="'+ix+'-'+si+'" inputmode="numeric" placeholder="'+(it.name==='Plank'?'sec':'reps')+'"><span class="small muted">RIR</span><span></span></div>').join('')+'<label>Effort<select data-aux-rir="'+ix+'"><option value="">—</option><option>3</option><option selected>4+</option></select></label></div>').join('')+
- '<div class="buttons"><button class="btn primary" id="saveWeek0Aux">Save Auxiliary Session</button></div><p class="small muted">This is logged as Week 0 auxiliary work. It does not replace, complete, or change any of your four calibration lifts.</p></div>';
+ '<div class="buttons"><button class="btn primary" id="saveWeek0Aux">Save Auxiliary Session</button></div>'+(p().week0AuxLastSavedAt?'<p class="good small">Last saved '+new Date(p().week0AuxLastSavedAt).toLocaleString()+'</p>':'')+'<p class="small muted">This is logged as Week 0 auxiliary work. It does not replace, complete, or change any of your four calibration lifts.</p></div>';
 }
 function renderWeek0(){
  let html='<div class="card"><div class="grid2"><label>Week<select id="wk"><option selected value="0">Week 0 · Calibration</option>'+Array.from({length:12},(_,i)=>'<option value="'+(i+1)+'">Week '+(i+1)+'</option>').join('')+'</select></label><div><div class="muted small">Purpose</div><div class="big">Find an honest starting point</div></div></div><p class="muted">The app gives you rep targets, not weights. Pick the weight your body is ready for today. Add weight gradually only while the reps stay clean. You do not have to reach the final set if an earlier heavy set gives us enough information.</p><div class="history"><b>What is RIR?</b><div class="small muted"><b>RIR = Reps In Reserve</b> — how many more clean reps you honestly think you could have done when the set ended. Example: RIR 2 means you stopped with about 2 good reps left. RIR 0 means you had no clean reps left.</div></div></div>';
