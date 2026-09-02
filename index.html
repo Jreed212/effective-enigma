@@ -357,6 +357,29 @@ function calibrationResult(sets){
  candidates.sort((a,b)=>b.e1rm-a.e1rm);
  return candidates[0];
 }
+function week0AuxPlan(){
+ return [
+  {name:'Rope Triceps',sets:2,reps:'10–12'},
+  {name:'DB Curl',sets:2,reps:'10–12'},
+  {name:'Hammer Curl',sets:2,reps:'10–12'},
+  {name:'Lateral Raise',sets:2,reps:'12–15'},
+  {name:'Plank',sets:2,reps:'30–45 sec'},
+  {name:'Cable Crunch',sets:2,reps:'10–15'}
+ ];
+}
+function saveWeek0Aux(){
+ const items=week0AuxPlan().map((it,ix)=>{
+  const sets=[];for(let si=0;si<it.sets;si++){const w=document.querySelector('[data-aux-w="'+ix+'-'+si+'"]')?.value||'',r=document.querySelector('[data-aux-r="'+ix+'-'+si+'"]')?.value||'';sets.push({weight:w,reps:r,done:!!(w||r),touched:!!(w||r)})}
+  return{name:it.name,type:'week0-aux',setsTarget:it.sets,repsTarget:it.reps,pct:0,sets,rir:document.querySelector('[data-aux-rir="'+ix+'"]')?.value||'',bestE1rm:0,pr:false};
+ });
+ const touched=items.some(it=>it.sets.some(s=>s.touched));if(!touched)return alert('Enter at least one set before saving.');
+ p().logs.push({id:'w0aux'+Date.now(),cycleNumber:p().activeCycle||1,week:0,workout:'Aux',startedAt:new Date().toISOString(),endedAt:new Date().toISOString(),durationMinutes:0,completionReason:'manual',items});save();alert('Week 0 auxiliary session saved.');render();
+}
+function week0AuxHtml(){
+ return '<div class="card"><h2>Optional Auxiliary / Recovery Session</h2><p class="muted">Use this between calibration days when you want to move without taking anything away from the remaining big lifts. Pick only what fits your time and how you feel. <b>You do not need to do every exercise.</b></p><div class="history"><b>Rules for today</b><div class="small muted">2 sets each · keep about 3–4 RIR · no grinding · stop anything that makes you feel less fresh for the remaining calibration lifts.</div></div>'+
+ week0AuxPlan().map((it,ix)=>'<div class="lift"><div class="row" style="justify-content:space-between"><div><b>'+it.name+'</b><div class="small muted">'+it.sets+' × '+it.reps+' · optional</div></div><button class="btn" data-tech="'+it.name+'">ⓘ Technique</button></div>'+Array.from({length:it.sets},(_,si)=>'<div class="set"><b>'+(si+1)+'</b><input data-aux-w="'+ix+'-'+si+'" inputmode="decimal" placeholder="'+(it.name==='Plank'?'—':'lb')+'"><input data-aux-r="'+ix+'-'+si+'" inputmode="numeric" placeholder="'+(it.name==='Plank'?'sec':'reps')+'"><span class="small muted">RIR</span><span></span></div>').join('')+'<label>Effort<select data-aux-rir="'+ix+'"><option value="">—</option><option>3</option><option selected>4+</option></select></label></div>').join('')+
+ '<div class="buttons"><button class="btn primary" id="saveWeek0Aux">Save Auxiliary Session</button></div><p class="small muted">This is logged as Week 0 auxiliary work. It does not replace, complete, or change any of your four calibration lifts.</p></div>';
+}
 function renderWeek0(){
  let html='<div class="card"><div class="grid2"><label>Week<select id="wk"><option selected value="0">Week 0 · Calibration</option>'+Array.from({length:12},(_,i)=>'<option value="'+(i+1)+'">Week '+(i+1)+'</option>').join('')+'</select></label><div><div class="muted small">Purpose</div><div class="big">Find an honest starting point</div></div></div><p class="muted">The app gives you rep targets, not weights. Pick the weight your body is ready for today. Add weight gradually only while the reps stay clean. You do not have to reach the final set if an earlier heavy set gives us enough information.</p><div class="history"><b>What is RIR?</b><div class="small muted"><b>RIR = Reps In Reserve</b> — how many more clean reps you honestly think you could have done when the set ended. Example: RIR 2 means you stopped with about 2 good reps left. RIR 0 means you had no clean reps left.</div></div></div>';
  mainLifts.forEach(l=>{
@@ -369,8 +392,10 @@ function renderWeek0(){
   html+='</div><div class="row" style="margin-top:10px"><button class="btn primary" data-cal="'+l+'">Use These Sets for Calibration</button>'+(q.tm?'<span class="pill good">e1RM '+Math.round(q.e1rm)+' · Training Max '+q.tm+' lb</span>':result?'<span class="pill">Current best set: '+result.weight+' × '+result.reps+'</span>':'')+'</div>'+
   '<p class="small muted">We save every set. For the starting strength estimate, the app uses your strongest valid set in the 2–6 rep range, then applies the conservative Training Max reduction for the 12-week plan.</p></div>';
  });
+ html+=week0AuxHtml();
  work.innerHTML=html;
  wk.onchange=()=>{S.week=+wk.value;save();render()};
+ if(document.getElementById('saveWeek0Aux'))saveWeek0Aux.onclick=saveWeek0Aux;
  document.querySelectorAll('[data-tech]').forEach(b=>b.onclick=()=>openTech(b.dataset.tech));
  document.querySelectorAll('[data-rw],[data-rr],[data-rir],[data-rd]').forEach(el=>{
    const handler=()=>{
