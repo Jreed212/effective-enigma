@@ -1,5 +1,5 @@
-const CACHE='strength-cycle-v32';
-const ASSETS=['./manifest.webmanifest'];
+const CACHE='strength-cycle-v33';
+const ASSETS=['./manifest.webmanifest','./warmups.js'];
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));
@@ -15,10 +15,13 @@ self.addEventListener('fetch',e=>{
   if(req.mode==='navigate' || new URL(req.url).pathname.endsWith('/index.html')){
     e.respondWith(
       fetch(req,{cache:'no-store'})
-        .then(r=>{
-          const copy=r.clone();
+        .then(async r=>{
+          const text=await r.text();
+          const injected=text.replace('</body>','<script src="warmups.js?v=33"></script></body>');
+          const out=new Response(injected,{status:r.status,statusText:r.statusText,headers:r.headers});
+          const copy=out.clone();
           caches.open(CACHE).then(c=>c.put('./',copy));
-          return r;
+          return out;
         })
         .catch(()=>caches.match('./'))
     );
