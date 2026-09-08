@@ -15,10 +15,13 @@
     const out=[];
     for(const [pct,reps,label] of scheme){
       let weight=round5(working*pct);
-      // Standard bar minimum. If a trap bar/machine has a heavier empty weight, user can edit it.
-      weight=Math.max(45,weight);
+      // Squat, bench and straight-bar OHP use a standard 45 lb bar: never prescribe less than the empty bar.
+      // Trap bars vary by gym, so 45 lb is a conservative floor and the field remains editable.
+      const minimum=45;
+      weight=Math.max(minimum,weight);
       if(weight>=working)weight=working-5;
-      if(weight<=0||weight>=working)continue;
+      // If the programmed working weight itself is 45 lb, there is no lighter barbell warm-up to prescribe.
+      if(working<=minimum||weight<minimum||weight>=working)continue;
       if(out.some(x=>x.weight===weight))continue;
       out.push({weight,reps,label,pct});
     }
@@ -53,7 +56,7 @@
   renderWork=function(){
     if(+S.week===0){renderWeek0();return;}
     const items=plan(S.week,S.workout),a=(p().active&&p().active.week===S.week&&p().active.workout===S.workout)?p().active:null;
-    let html='<div class="card"><div class="grid2"><label>Week<select id="wk"><option value="0">Week 0 · Calibration</option>'+Array.from({length:12},(_,i)=>'<option value="'+(i+1)+'" '+(S.week===i+1?'selected':'')+'>Week '+(i+1)+'</option>').join('')+'</select></label><label>Workout<select id="wo">'+['A','B','C'].map(x=>'<option '+(S.workout===x?'selected':'')+'>'+x+'</option>').join('')+'</select></label></div><p class="muted">Warm-up/ramp weights are calculated for you. First entry starts the workout automatically. 15 minutes of no input auto-finishes it.</p>'+(a?'<span class="pill good">Active since '+new Date(a.startedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})+'</span>':'<span class="pill">Not started</span>')+'</div>';
+    let html='<div class="card"><div class="grid2"><label>Week<select id="wk"><option value="0">Week 0 · Calibration</option>'+Array.from({length:12},(_,i)=>'<option value="'+(i+1)+'" '+(S.week===i+1?'selected':'')+'>Week '+(i+1)+'</option>').join('')+'</select></label><label>Workout<select id="wo">'+['A','B','C'].map(x=>'<option '+(S.workout===x?'selected':'')+'>'+x+'</option>').join('')+'</select></label></div><p class="muted">Warm-up/ramp weights are calculated for you. Barbell warm-ups never go below the 45 lb empty bar. First entry starts the workout automatically. 15 minutes of no input auto-finishes it.</p>'+(a?'<span class="pill good">Active since '+new Date(a.startedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})+'</span>':'<span class="pill">Not started</span>')+'</div>';
 
     items.forEach((it,ix)=>{
       const wt=it.type==='main'?workWt(it.name,it.pct):lastAccessory(it.name).weight;
@@ -64,6 +67,7 @@
       if(it.type==='main'&&wt){
         const wus=warmupSetsFor(it.name,wt);
         html+='<div class="lift"><div class="row" style="justify-content:space-between"><b>Warm-up / ramp</b><span class="small muted">Not working sets</span></div>';
+        if(!wus.length&&wt<=45)html+='<div class="small muted" style="margin:8px 0">Working weight is the empty 45 lb bar, so no lighter barbell ramp is needed. Use easy movement/rehearsal reps before the working sets.</div>';
         wus.forEach((wu,wi)=>{
           const saved=d.warmups?.[wi]||{};
           html+='<div class="set"><b>W'+(wi+1)+'</b><input data-wu-w="'+ix+'-'+wi+'" value="'+(saved.weight||wu.weight)+'" inputmode="decimal" placeholder="lb"><input data-wu-r="'+ix+'-'+wi+'" value="'+(saved.reps||wu.reps)+'" inputmode="numeric" placeholder="reps"><span class="small muted">'+wu.label+'</span><input data-wu-d="'+ix+'-'+wi+'" type="checkbox" '+(saved.done?'checked':'')+'></div>';
@@ -113,6 +117,5 @@
     clear.onclick=()=>{if(confirm('Clear the active workout?')){p().active=null;save();render();}};
   };
 
-  // Re-render once after applying the enhancement.
   if(typeof render==='function')render();
 })();
