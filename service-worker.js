@@ -1,5 +1,5 @@
-const CACHE='strength-cycle-v34';
-const ASSETS=['./manifest.webmanifest','./warmups.js'];
+const CACHE='strength-cycle-v35';
+const ASSETS=['./manifest.webmanifest','./warmups.js','./exercise-rotation-patch.js'];
 self.addEventListener('install',e=>{
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));
@@ -17,7 +17,7 @@ self.addEventListener('fetch',e=>{
       fetch(req,{cache:'no-store'})
         .then(async r=>{
           const text=await r.text();
-          const injected=text.replace('</body>','<script src="warmups.js?v=34"></script></body>');
+          const injected=text.replace('</body>','<script src="warmups.js?v=35"></script><script src="exercise-rotation-patch.js?v=35"></script></body>');
           const out=new Response(injected,{status:r.status,statusText:r.statusText,headers:r.headers});
           const copy=out.clone();
           caches.open(CACHE).then(c=>c.put('./',copy));
