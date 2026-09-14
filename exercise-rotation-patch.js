@@ -4,7 +4,6 @@
   if(window.StrengthRotationPatchApplied)return;
   window.StrengthRotationPatchApplied=true;
 
-  // Add technique metadata for the overhead triceps variation if the base app does not already have it.
   if(typeof ex==='object'&&!ex['Overhead Rope Triceps Extension']){
     ex['Overhead Rope Triceps Extension']={
       cat:'Arms',eq:'Cable + rope',
@@ -18,8 +17,12 @@
   rotation=function(week,w){
     const list=baseRotation(week,w).slice();
     if(w==='C'){
-      const i=list.indexOf('Rope Triceps');
-      if(i>=0)list[i]='Overhead Rope Triceps Extension';
+      const tri=list.indexOf('Rope Triceps');
+      if(tri>=0)list[tri]='Overhead Rope Triceps Extension';
+
+      // Avoid repeating DB Curl from Workout A in the same week.
+      const curl=list.indexOf('DB Curl');
+      if(curl>=0)list[curl]='Hammer Curl';
     }
     return list;
   };
