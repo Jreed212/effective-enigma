@@ -4,7 +4,7 @@
  const accessoryAliases={
   'Leg Press':['Leg Press'],'Hack Squat':['Hack Squat','Leg Press'],
   'DB Curl':['DB Curl','Hammer Curl'],'Hammer Curl':['Hammer Curl','DB Curl'],
-  'Rope Triceps':['Rope Triceps','Overhead Rope Triceps Extension'],'Overhead Rope Triceps Extension':['Overhead Rope Triceps Extension','Rope Triceps'],
+  'Rope Triceps':['Rope Triceps'],'Overhead Rope Triceps Extension':['Overhead Rope Triceps Extension'],
   // Incline DB history is useful as a reference, but barbell loading is different: don't auto-copy DB pounds.
   'Incline Barbell Bench Press':['Incline Barbell Bench Press']
  };
