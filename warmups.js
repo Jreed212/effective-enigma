@@ -35,7 +35,9 @@
       for(let si=0;si<it.sets;si++){const s=d.sets?.[si]||{};sets.push({weight:s.weight||'',reps:s.reps||'',done:!!s.done,touched:!!s.touched});}
       let best=0;for(const s of sets){if(+s.weight&&+s.reps&&+s.reps<=12)best=Math.max(best,e1rm(+s.weight,+s.reps));}
       const warmups=it.type==='main'?Object.keys(d.warmups||{}).sort((x,y)=>+x-+y).map(k=>{const w=d.warmups[k]||{};return{weight:w.weight||'',reps:w.reps||'',done:!!w.done,touched:!!w.touched};}):[];
-      return{name:it.name,type:it.type,setsTarget:it.sets,repsTarget:it.reps,pct:it.pct,sets,warmups,rir:d.rir||'',bestE1rm:best,pr:it.type==='main'&&best>bestPrior(it.name,end)+.5};
+      const calibrationBaseline=+(p().cal?.[it.name]?.e1rm||0);
+      const priorRecord=Math.max(calibrationBaseline,bestPrior(it.name,end));
+      return{name:it.name,type:it.type,setsTarget:it.sets,repsTarget:it.reps,pct:it.pct,sets,warmups,rir:d.rir||'',bestE1rm:best,pr:it.type==='main'&&best>priorRecord+.5};
     });
     const touched=items.reduce((n,it)=>n+it.sets.filter(s=>s.touched||s.done).length+((it.warmups||[]).filter(s=>s.touched||s.done).length),0);
     if(!touched&&reason==='timeout'){p().active=null;save();return;}
