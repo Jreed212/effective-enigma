@@ -32,7 +32,12 @@
     const pl=plan(a.week,a.workout),items=pl.map((it,ix)=>{
       const d=a.items[ix]||{sets:{},rir:'',warmups:{}};
       const sets=[];
-      for(let si=0;si<it.sets;si++){const s=d.sets?.[si]||{};sets.push({weight:s.weight||'',reps:s.reps||'',rir:s.rir??'',done:!!s.done,touched:!!s.touched});}
+      for(let si=0;si<it.sets;si++){
+        const s=d.sets?.[si]||{};
+        // A displayed prescribed/carry-forward weight is real workout data even if the user never edits that field.
+        const fallbackWeight=it.type==='main'?workWt(it.name,it.pct):lastAccessory(it.name).weight;
+        sets.push({weight:s.weight||fallbackWeight||'',reps:s.reps||'',rir:s.rir??'',done:!!s.done,touched:!!s.touched});
+      }
       let best=0;for(const s of sets){if(+s.weight&&+s.reps&&+s.reps<=12)best=Math.max(best,e1rm(+s.weight,+s.reps));}
       const warmups=it.type==='main'?Object.keys(d.warmups||{}).sort((x,y)=>+x-+y).map(k=>{const w=d.warmups[k]||{};return{weight:w.weight||'',reps:w.reps||'',done:!!w.done,touched:!!w.touched};}):[];
       const calibrationBaseline=+(p().cal?.[it.name]?.e1rm||0);
@@ -70,7 +75,7 @@
     html+='<div class="buttons"><button class="btn primary" id="done">Save Completed Workout</button><button class="btn danger" id="clear">Clear Active Session</button></div>';work.innerHTML=html;
     wk.onchange=()=>{S.week=+wk.value;save();render();};wo.onchange=()=>{S.workout=wo.value;save();render();};
     document.querySelectorAll('[data-wu-w],[data-wu-r],[data-wu-d]').forEach(el=>{const fn=()=>{const aa=touch(),key=el.dataset.wuW||el.dataset.wuR||el.dataset.wuD,[ix,wi]=key.split('-');aa.items[ix]=aa.items[ix]||{sets:{},rir:'',warmups:{}};aa.items[ix].warmups=aa.items[ix].warmups||{};aa.items[ix].warmups[wi]=aa.items[ix].warmups[wi]||{};const z=aa.items[ix].warmups[wi];if(el.dataset.wuW!==undefined)z.weight=el.value;if(el.dataset.wuR!==undefined)z.reps=el.value;if(el.dataset.wuD!==undefined)z.done=el.checked;z.touched=true;aa.lastActivityAt=new Date().toISOString();save();};el.addEventListener('input',fn);el.addEventListener('change',fn);});
-    document.querySelectorAll('[data-wt],[data-rp],[data-ri],[data-dn]').forEach(el=>{const fn=()=>{const aa=touch(),key=(el.dataset.wt||el.dataset.rp||el.dataset.ri||el.dataset.dn),[ix,si]=key.split('-');aa.items[ix]=aa.items[ix]||{sets:{},rir:'',warmups:{}};aa.items[ix].sets[si]=aa.items[ix].sets[si]||{};const z=aa.items[ix].sets[si];if(el.dataset.wt!==undefined)z.weight=el.value;if(el.dataset.rp!==undefined)z.reps=el.value;if(el.dataset.ri!==undefined)z.rir=el.value;if(el.dataset.dn!==undefined)z.done=el.checked;z.touched=true;aa.lastActivityAt=new Date().toISOString();save();};el.addEventListener('input',fn);el.addEventListener('change',fn);});
+    document.querySelectorAll('[data-wt],[data-rp],[data-ri],[data-dn]').forEach(el=>{const fn=()=>{const aa=touch(),key=(el.dataset.wt||el.dataset.rp||el.dataset.ri||el.dataset.dn),[ix,si]=key.split('-');aa.items[ix]=aa.items[ix]||{sets:{},rir:'',warmups:{}};aa.items[ix].sets[si]=aa.items[ix].sets[si]||{};const z=aa.items[ix].sets[si];const row=document.querySelector('[data-wt="'+ix+'-'+si+'"]');if(row&&row.value)z.weight=row.value;if(el.dataset.wt!==undefined)z.weight=el.value;if(el.dataset.rp!==undefined)z.reps=el.value;if(el.dataset.ri!==undefined)z.rir=el.value;if(el.dataset.dn!==undefined)z.done=el.checked;z.touched=true;aa.lastActivityAt=new Date().toISOString();save();};el.addEventListener('input',fn);el.addEventListener('change',fn);});
     document.querySelectorAll('[data-tech]').forEach(b=>b.onclick=()=>openTech(b.dataset.tech));done.onclick=()=>{if(!p().active){if(!confirm('No sets entered. Save anyway?'))return;touch();}finish('manual');};clear.onclick=()=>{if(confirm('Clear the active workout?')){p().active=null;save();render();}};
   };
   if(typeof render==='function')render();
