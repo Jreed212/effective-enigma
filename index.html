@@ -142,7 +142,22 @@ function groupHubHtml(){
 }
 async function initCloudAuth(){
   if(!window.StrengthCloud?.configured())return;
-  try{await cloudRefresh();if(cloudSession){const remote=await window.StrengthCloud.pullUserState();if(remote?.profile){const mapped=window.StrengthCloud.toLocal(remote,p());const oldId=S.profileId;mapped.profile.id=oldId;S.profiles=S.profiles.map(x=>x.id===oldId?mapped.profile:x);S.week=mapped.week;S.workout=mapped.workout;localStorage.setItem(KEY,JSON.stringify(S));cloudMessage='Cloud sync active';await loadGroupHub(false);render()}}}catch(e){console.error(e);cloudMessage='Cloud connection needs attention'}
+  try{
+    const localActive=p().active?JSON.parse(JSON.stringify(p().active)):null;
+    await cloudRefresh();
+    if(cloudSession){
+      const remote=await window.StrengthCloud.pullUserState();
+      if(remote?.profile){
+        const mapped=window.StrengthCloud.toLocal(remote,p()),oldId=S.profileId;
+        mapped.profile.id=oldId;
+        // Cloud stores completed history; an in-progress local workout is newer and must never be erased by startup sync.
+        if(localActive)mapped.profile.active=localActive;
+        S.profiles=S.profiles.map(x=>x.id===oldId?mapped.profile:x);
+        S.week=localActive?.week??mapped.week;S.workout=localActive?.workout??mapped.workout;
+        localStorage.setItem(KEY,JSON.stringify(S));cloudMessage='Cloud sync active';await loadGroupHub(false);render();
+      }
+    }
+  }catch(e){console.error(e);cloudMessage='Cloud connection needs attention'}
 }
 function cloudAccountHtml(){
   if(!window.StrengthCloud?.configured())return '<div class="card"><b>Cloud Sync</b><p class="muted">Cloud backend not configured yet.</p></div>';
