@@ -32,12 +32,14 @@
     const pl=plan(a.week,a.workout),items=pl.map((it,ix)=>{
       const d=a.items[ix]||{sets:{},rir:'',warmups:{}};
       const sets=[];
-      for(let si=0;si<it.sets;si++){const s=d.sets?.[si]||{};sets.push({weight:s.weight||'',reps:s.reps||'',done:!!s.done,touched:!!s.touched});}
+      for(let si=0;si<it.sets;si++){const s=d.sets?.[si]||{};sets.push({weight:s.weight||'',reps:s.reps||'',rir:s.rir??'',done:!!s.done,touched:!!s.touched});}
       let best=0;for(const s of sets){if(+s.weight&&+s.reps&&+s.reps<=12)best=Math.max(best,e1rm(+s.weight,+s.reps));}
       const warmups=it.type==='main'?Object.keys(d.warmups||{}).sort((x,y)=>+x-+y).map(k=>{const w=d.warmups[k]||{};return{weight:w.weight||'',reps:w.reps||'',done:!!w.done,touched:!!w.touched};}):[];
       const calibrationBaseline=+(p().cal?.[it.name]?.e1rm||0);
       const priorRecord=Math.max(calibrationBaseline,bestPrior(it.name,end));
-      return{name:it.name,type:it.type,setsTarget:it.sets,repsTarget:it.reps,pct:it.pct,sets,warmups,rir:d.rir||'',bestE1rm:best,pr:it.type==='main'&&best>priorRecord+.5};
+      const finalSet=[...sets].reverse().find(s=>s.touched||s.done||s.weight||s.reps);
+      const finalRir=finalSet?.rir!==''&&finalSet?.rir!=null?String(finalSet.rir):(d.rir||'');
+      return{name:it.name,type:it.type,setsTarget:it.sets,repsTarget:it.reps,pct:it.pct,sets,warmups,rir:finalRir,bestE1rm:best,pr:it.type==='main'&&best>priorRecord+.5};
     });
     const touched=items.reduce((n,it)=>n+it.sets.filter(s=>s.touched||s.done).length+((it.warmups||[]).filter(s=>s.touched||s.done).length),0);
     if(!touched&&reason==='timeout'){p().active=null;save();return;}
@@ -61,14 +63,14 @@
         wus.forEach((wu,wi)=>{const saved=d.warmups?.[wi]||{};html+='<div class="set"><b>W'+(wi+1)+'</b><input data-wu-w="'+ix+'-'+wi+'" value="'+(saved.weight||wu.weight)+'" inputmode="decimal" placeholder="lb"><input data-wu-r="'+ix+'-'+wi+'" value="'+(saved.reps||wu.reps)+'" inputmode="numeric" placeholder="reps"><span class="small muted">'+wu.label+'</span><input data-wu-d="'+ix+'-'+wi+'" type="checkbox" '+(saved.done?'checked':'')+'></div>';});
         html+='</div><div class="lift"><div class="row" style="justify-content:space-between"><b>Working sets</b><span class="pill">'+it.sets+' sets</span></div>';
       }
-      for(let si=0;si<it.sets;si++){const ss=d.sets?.[si]||{};html+='<div class="set"><b>'+(si+1)+'</b><input data-wt="'+ix+'-'+si+'" value="'+(ss.weight||wt||'')+'" inputmode="decimal" placeholder="lb"><input data-rp="'+ix+'-'+si+'" value="'+(ss.reps||'')+'" inputmode="numeric" placeholder="reps"><select data-ri="'+ix+'-'+si+'"><option value="">RIR</option><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4+</option></select><input data-dn="'+ix+'-'+si+'" type="checkbox" '+(ss.done?'checked':'')+'></div>';}
+      for(let si=0;si<it.sets;si++){const ss=d.sets?.[si]||{};html+='<div class="set"><b>'+(si+1)+'</b><input data-wt="'+ix+'-'+si+'" value="'+(ss.weight||wt||'')+'" inputmode="decimal" placeholder="lb"><input data-rp="'+ix+'-'+si+'" value="'+(ss.reps||'')+'" inputmode="numeric" placeholder="reps"><select data-ri="'+ix+'-'+si+'"><option value="" '+(ss.rir===''||ss.rir==null?'selected':'')+'>RIR</option><option '+(String(ss.rir)==='0'?'selected':'')+'>0</option><option '+(String(ss.rir)==='1'?'selected':'')+'>1</option><option '+(String(ss.rir)==='2'?'selected':'')+'>2</option><option '+(String(ss.rir)==='3'?'selected':'')+'>3</option><option '+(String(ss.rir)==='4+'?'selected':'')+'>4+</option></select><input data-dn="'+ix+'-'+si+'" type="checkbox" '+(ss.done?'checked':'')+'></div>';}
       if(it.type==='main'&&wt)html+='</div>';
-      html+='<label>Final-set RIR<select data-final="'+ix+'"><option value="">—</option><option>0</option><option>1</option><option '+(d.rir==='2'?'selected':'')+'>2</option><option>3</option><option>4+</option></select></label></div>';
+      html+='</div>';
     });
     html+='<div class="buttons"><button class="btn primary" id="done">Save Completed Workout</button><button class="btn danger" id="clear">Clear Active Session</button></div>';work.innerHTML=html;
     wk.onchange=()=>{S.week=+wk.value;save();render();};wo.onchange=()=>{S.workout=wo.value;save();render();};
     document.querySelectorAll('[data-wu-w],[data-wu-r],[data-wu-d]').forEach(el=>{const fn=()=>{const aa=touch(),key=el.dataset.wuW||el.dataset.wuR||el.dataset.wuD,[ix,wi]=key.split('-');aa.items[ix]=aa.items[ix]||{sets:{},rir:'',warmups:{}};aa.items[ix].warmups=aa.items[ix].warmups||{};aa.items[ix].warmups[wi]=aa.items[ix].warmups[wi]||{};const z=aa.items[ix].warmups[wi];if(el.dataset.wuW!==undefined)z.weight=el.value;if(el.dataset.wuR!==undefined)z.reps=el.value;if(el.dataset.wuD!==undefined)z.done=el.checked;z.touched=true;aa.lastActivityAt=new Date().toISOString();save();};el.addEventListener('input',fn);el.addEventListener('change',fn);});
-    document.querySelectorAll('[data-wt],[data-rp],[data-dn],[data-final]').forEach(el=>{const fn=()=>{const aa=touch(),key=(el.dataset.wt||el.dataset.rp||el.dataset.dn||el.dataset.final);if(el.dataset.final!==undefined){aa.items[key]=aa.items[key]||{sets:{},warmups:{}};aa.items[key].rir=el.value;}else{const [ix,si]=key.split('-');aa.items[ix]=aa.items[ix]||{sets:{},rir:'',warmups:{}};aa.items[ix].sets[si]=aa.items[ix].sets[si]||{};const z=aa.items[ix].sets[si];if(el.dataset.wt!==undefined)z.weight=el.value;if(el.dataset.rp!==undefined)z.reps=el.value;if(el.dataset.dn!==undefined)z.done=el.checked;z.touched=true;}aa.lastActivityAt=new Date().toISOString();save();};el.addEventListener('input',fn);el.addEventListener('change',fn);});
+    document.querySelectorAll('[data-wt],[data-rp],[data-ri],[data-dn]').forEach(el=>{const fn=()=>{const aa=touch(),key=(el.dataset.wt||el.dataset.rp||el.dataset.ri||el.dataset.dn),[ix,si]=key.split('-');aa.items[ix]=aa.items[ix]||{sets:{},rir:'',warmups:{}};aa.items[ix].sets[si]=aa.items[ix].sets[si]||{};const z=aa.items[ix].sets[si];if(el.dataset.wt!==undefined)z.weight=el.value;if(el.dataset.rp!==undefined)z.reps=el.value;if(el.dataset.ri!==undefined)z.rir=el.value;if(el.dataset.dn!==undefined)z.done=el.checked;z.touched=true;aa.lastActivityAt=new Date().toISOString();save();};el.addEventListener('input',fn);el.addEventListener('change',fn);});
     document.querySelectorAll('[data-tech]').forEach(b=>b.onclick=()=>openTech(b.dataset.tech));done.onclick=()=>{if(!p().active){if(!confirm('No sets entered. Save anyway?'))return;touch();}finish('manual');};clear.onclick=()=>{if(confirm('Clear the active workout?')){p().active=null;save();render();}};
   };
   if(typeof render==='function')render();
