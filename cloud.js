@@ -55,6 +55,17 @@ window.StrengthCloud = (() => {
     const rows=(p.logs||[]).filter(l=>l.id&&l.startedAt&&l.endedAt).map(l=>({id:l.id,user_id:uid,week:+l.week,workout:l.workout,started_at:l.startedAt,ended_at:l.endedAt,duration_minutes:+l.durationMinutes||0,completion_reason:l.completionReason||'manual',items:l.items||[],cycle_number:+(l.cycleNumber||p.activeCycle||1),updated_at:new Date().toISOString()}));
     if(!rows.length)return; const {error}=await client.from('workout_logs').upsert(rows); if(error) throw error;
   }
+  async function pushTmHistory(p){
+    const s=await session(); if(!s) throw new Error('Not signed in'); const uid=s.user.id;
+    const rows=(p.tmHistory||[]).filter(x=>x.afterWeek).map(x=>({user_id:uid,after_week:+x.afterWeek,changes:x.changes||[],created_at:x.date||new Date().toISOString(),cycle_number:+(p.activeCycle||1)}));
+    if(!rows.length)return;
+    // One review per block/cycle. Replace the cloud copy with the current local review history.
+    for(const row of rows){
+      const {error:delError}=await client.from('tm_history').delete().eq('user_id',uid).eq('cycle_number',row.cycle_number).eq('after_week',row.after_week);
+      if(delError)throw delError;
+      const {error}=await client.from('tm_history').insert(row); if(error)throw error;
+    }
+  }
   async function pushCheckins(p){
     const s=await session(); if(!s) throw new Error('Not signed in'); const uid=s.user.id;
     const rows=(p.checkins||[]).filter(x=>x.date).map(x=>({user_id:uid,checkin_date:x.date,body_weight:x.weight?+x.weight:null,waist:x.waist?+x.waist:null,note:x.note||null}));
@@ -78,7 +89,7 @@ async function groupStats(groupId){
     if(error) throw error;
     return data||[];
   }
-  async function pushAll(p,week,workout){ await pushProfile(p,week,workout); await pushCalibrations(p); await pushWorkouts(p); await pushCheckins(p); }
+  async function pushAll(p,week,workout){ await pushProfile(p,week,workout); await pushCalibrations(p); await pushWorkouts(p); await pushCheckins(p); await pushTmHistory(p); }
   async function createGroup(name,joinCode){
     const s=await session(); if(!s) throw new Error('Not signed in');
     const {data,error}=await client.rpc('create_training_group',{p_name:name,p_join_code:joinCode});
@@ -133,5 +144,5 @@ async function listMyGroups(){
     if(cloud.memberships?.length){const m=cloud.memberships[0],g=m.training_groups;if(g)p.group={id:g.id,name:g.name,code:g.join_code,role:m.role||'member'}}
     return {profile:p,week:+cp.current_week||0,workout:cp.current_workout||'A'};
   }
-  return {configured,init,session,signUp,signIn,signOut,pullUserState,pushProfile,pushCalibrations,pushWorkout,pushWorkouts,pushAll,createGroup,joinGroup,leaveGroup,listMyGroups,listJoinableGroups,requestGroupJoin,listOwnedGroupRequests,respondGroupJoinRequest,pushCheckins,groupStats,archiveAndStartNextCycle,toLocal};
+  return {configured,init,session,signUp,signIn,signOut,pullUserState,pushProfile,pushCalibrations,pushWorkout,pushWorkouts,pushAll,createGroup,joinGroup,leaveGroup,listMyGroups,listJoinableGroups,requestGroupJoin,listOwnedGroupRequests,respondGroupJoinRequest,pushCheckins,pushTmHistory,groupStats,archiveAndStartNextCycle,toLocal};
 })();
