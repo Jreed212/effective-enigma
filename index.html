@@ -150,8 +150,16 @@ async function initCloudAuth(){
       if(remote?.profile){
         const mapped=window.StrengthCloud.toLocal(remote,p()),oldId=S.profileId;
         mapped.profile.id=oldId;
-        // Cloud stores completed history; an in-progress local workout is newer and must never be erased by startup sync.
+        // Never discard local-only completed sessions during startup cloud refresh.
+        // Merge by stable log ID; keep local copy if the same ID exists in both.
+        const localProfile=p();
+        const mergedLogs=new Map((mapped.profile.logs||[]).map(l=>[l.id,l]));
+        for(const log of localProfile.logs||[])if(log?.id)mergedLogs.set(log.id,log);
+        mapped.profile.logs=[...mergedLogs.values()].sort((a,b)=>new Date(a.endedAt||0)-new Date(b.endedAt||0));
+        // Preserve the active workout and local block-review state.
         if(localActive)mapped.profile.active=localActive;
+        mapped.profile.applied={...(mapped.profile.applied||{}),...(localProfile.applied||{})};
+        mapped.profile.tmHistory=(localProfile.tmHistory?.length?localProfile.tmHistory:mapped.profile.tmHistory)||[];
         S.profiles=S.profiles.map(x=>x.id===oldId?mapped.profile:x);
         S.week=localActive?.week??mapped.week;S.workout=localActive?.workout??mapped.workout;
         localStorage.setItem(KEY,JSON.stringify(S));cloudMessage='Cloud sync active';await loadGroupHub(false);render();
